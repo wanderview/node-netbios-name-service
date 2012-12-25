@@ -1,0 +1,16 @@
+{
+  "name": "netbios-name-service",
+  "version": "0.1.0",
+  "author": "Ben Kelly <ben@wanderview.com>",
+  "license": "BSD",
+  "dependencies": {
+    "netbios-name": "~0.1.0"
+  },
+  "devDependencies": {
+    "nodeunit": "~0.7.4"
+  },
+  "scripts": {
+    "test":"nodeunit test"
+  },
+  "main": "service.js"
+}
