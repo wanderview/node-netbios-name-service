@@ -13,5 +13,5 @@
   "scripts": {
     "test": "nodeunit test"
   },
-  "main": "service.js"
+  "main": "lib/netbios-ns.js"
 }
