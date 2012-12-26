@@ -1,8 +1,9 @@
 "use strict";
 
-var ns = require('../lib/netbios-ns')
 var pcap = require('pcap-parser');
 var path = require('path');
+
+var unpack = require('../unpack');
 
 //
 // Helper routines
@@ -20,7 +21,7 @@ function pcapUnpack(file, callback) {
   var parser = pcap.parse(path.join(__dirname, 'data', file));
   parser.on('packetData', function(buf) {
     var udpPayload = buf.slice(UDP_PAYLOAD_OFFSET);
-    ns.unpack(udpPayload, function(error, mLen, msg) {
+    unpack(udpPayload, function(error, mLen, msg) {
       callback(error, mLen, msg);
     });
   });

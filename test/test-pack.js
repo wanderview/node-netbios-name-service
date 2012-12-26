@@ -1,8 +1,10 @@
 "use strict";
 
-var ns = require('../lib/netbios-ns')
 var pcap = require('pcap-parser');
 var path = require('path');
+
+var pack = require('../pack');
+var unpack = require('../unpack');
 
 // TODO: do a better job of testing name compression; include pointers, etc
 
@@ -28,12 +30,12 @@ function testPcap(test, file, callback) {
     var udpPayload = buf.slice(UDP_PAYLOAD_OFFSET);
 
     // Parse the contents of the message
-    ns.unpack(udpPayload, function(error, mLen, msg) {
+    unpack(udpPayload, function(error, mLen, msg) {
       test.equal(error, null, 'unpack got error [' + error + ']');
 
       // Re-pack the message back into a network buffer
       var buf = new Buffer(mLen);
-      ns.pack(buf, msg, function(error, packedLen) {
+      pack(buf, msg, function(error, packedLen) {
         test.equal(error, null, 'pack got error [' + error + ']');
 
         // verify re-packed message exactly matches original buffer

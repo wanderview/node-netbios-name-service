@@ -1,6 +1,6 @@
 "use strict";
 
-var con = require('./netbios-ns-const');
+var con = require('./constant');
 var unpackName = require('netbios-name/unpack');
 
 var RR_TYPE_TO_PARSER = {
