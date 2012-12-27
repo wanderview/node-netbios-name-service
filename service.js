@@ -30,6 +30,8 @@ var dgram = require('dgram');
 var net = require('net');
 var util = require('util');
 
+var unpack = require('./unpack');
+
 util.inherits(NetbiosNameService, EventEmitter);
 
 function NetbiosNameService(options) {
@@ -149,16 +151,53 @@ NetbiosNameService.prototype._stopUdp = function(callback) {
 };
 
 NetbiosNameService.prototype.register = function(name, suffix, address, callback) {
+  // if already in name cache
+
+    // ignore or flag as conflict
+
+  // if not in name cache
+
+    // send register request
+
+    // save state for response
 };
 
 NetbiosNameService.prototype.unregister = function(name, suffix, callback) {
+  // if registered by us
+
+    // send unregister request
 };
 
 NetbiosNameService.prototype.query = function(name, suffix, callback) {
+  // if in name cache
+
+    // send status request
+
+    // save state for response
+
+  // if not in name cache
+
+    // send query request
+
+    // save state for response
 };
 
 NetbiosNameService.prototype._onUdpMsg = function(msg, rinfo) {
+  var self = this;
+  unpack(msg, 0, function(error, len, nbmsg) {
+    if (error) {
+      self.emit('error', error);
+      return;
+    }
+
+    self._onNetbiosMsg(nbmsg, rinfo.address);
+  });
 };
 
 NetbiosNameService.prototype._onTcpConnect = function(socket) {
+  // TODO:  create tcp name service stream
+};
+
+NetbiosNameService.prototype._onNetbiosMsg = function(msg, fromAddress) {
+  // TODO: handle different NetBIOS messages
 };
