@@ -30,6 +30,7 @@ var dgram = require('dgram');
 var net = require('net');
 var util = require('util');
 
+var stream = require('./stream');
 var unpack = require('./unpack');
 
 util.inherits(NetbiosNameService, EventEmitter);
