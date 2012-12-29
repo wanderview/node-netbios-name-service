@@ -30,7 +30,7 @@ var dgram = require('dgram');
 var net = require('net');
 var util = require('util');
 
-var stream = require('./stream');
+var Stream = require('./stream');
 var unpack = require('./unpack');
 
 util.inherits(NetbiosNameService, EventEmitter);
@@ -196,7 +196,17 @@ NetbiosNameService.prototype._onUdpMsg = function(msg, rinfo) {
 };
 
 NetbiosNameService.prototype._onTcpConnect = function(socket) {
-  // TODO:  create tcp name service stream
+  var self = this;
+  var stream = new Stream(socket);
+
+  // TODO: How do we handle socket teardown here?  Do we have to cleanup
+  //       anything to avoid memory leaks due to stale objects?
+
+  stream.on('error', self.emit.bind(self, 'error'));
+  stream.on('message', function(msg) {
+    // TODO: pass some kind of response function handler to _onNetbiosMsg()
+    self._onNetbiosMsg(msg, socket.address()['address']);
+  });
 };
 
 NetbiosNameService.prototype._onNetbiosMsg = function(msg, fromAddress) {
