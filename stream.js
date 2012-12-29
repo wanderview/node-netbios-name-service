@@ -40,9 +40,11 @@ function NetbiosNameServiceStream(socket) {
            : Object.create(NetbiosNameServiceStream.prototype);
 
   self._socket = socket;
+  self._socket.on('drain', self.emit.bind('drain'));
 
   self._stream = new Readable();
   self._stream.wrap(self._socket);
+  self._stream.on('end', self.emit.bind(self, 'end'));
 
   self._length = null;
   self._readFunc = self._readLength.bind(self);
@@ -54,11 +56,17 @@ NetbiosNameServiceStream.prototype.start = function() {
   this._read();
 };
 
+NetbiosNameServiceStream.prototype.destroy = function() {
+  this._socket.destroy();
+};
+
 NetbiosNameServiceStream.prototype.write = function(netbiosMsg, callback) {
   var self = this;
 
   // allocate max allowed length buffer for message:  (2^16 - 1) bytes
   var msgBuf = new Buffer(65535);
+
+  var result = false;
 
   // pack the netbios message into the buffer
   pack(msgBuf, netbiosMsg, function(error, len) {
@@ -71,9 +79,20 @@ NetbiosNameServiceStream.prototype.write = function(netbiosMsg, callback) {
     var lenBuf = new Buffer(2);
     lenBuf.writeUInt16BE(len, 0);
 
-    self._socket.write(lenBuf);
-    self._socket.write(msgBuf.slice(0, len), null, callback);
+    // Merge the length and message buffers.  This copies the message again,
+    // but it greatly simplifies the code since we can write to the socket
+    // in one call.  If we write the buffers separately then properly handling
+    // back pressure and the drain event gets unnecessarily complicated.  Lets
+    // avoid that until we determine we must avoid the copy.
+    var outBuf = Buffer.concat([lenBuf, msgBuf.slice(0, len)], 2 + len);
+
+    // Return the write result back to communicate back pressure to our
+    // caller.  The socket 'drain' events are already forwarded to our emitted
+    // 'drain' event in the constructor.
+    result = self._socket.write(outBuf, null, callback);
   });
+
+  return result;
 };
 
 NetbiosNameServiceStream.prototype._read = function() {

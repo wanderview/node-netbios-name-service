@@ -41,7 +41,7 @@ module.exports.testStream = function(test) {
       serverStream.on('message', function(msg) {
         test.ok(true);
         server.close(function() {
-          socket.destroy();
+          serverStream.destroy();
           test.done();
         });
       });
@@ -54,7 +54,7 @@ module.exports.testStream = function(test) {
 
       pcapUnpack('netbios-ns-b-query-winxp.pcap', function(error, len, msg) {
         clientStream.write(msg);
-        client.destroy();
+        clientStream.destroy();
       });
     });
   });
