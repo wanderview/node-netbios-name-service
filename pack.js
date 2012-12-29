@@ -11,6 +11,8 @@ var RR_TYPE_STRING_TO_WRITER = {
   'nbstat': nbstatRDataWriter
 };
 
+// TODO: properly handle truncation and truncate flag due to buffer limits
+
 function packQuestion(buf, offset, nameMap, question, callback) {
   var bytes = 0;
 
