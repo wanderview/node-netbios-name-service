@@ -31,6 +31,7 @@ var net = require('net');
 var util = require('util');
 
 var Stream = require('./stream');
+var pack = require('./pack');
 var unpack = require('./unpack');
 
 util.inherits(NetbiosNameService, EventEmitter);
@@ -39,6 +40,8 @@ function NetbiosNameService(options) {
   var self = this instanceof NetbiosNameService
            ? this
            : Object.create(NetbiosNameService.prototype);
+
+  EventEmitter.call(self);
 
   options = options || {};
 
@@ -55,6 +58,8 @@ function NetbiosNameService(options) {
     self._udpAddress = options.udpAddress;
     self._udpSocket = options.udpSocket;
   }
+
+  self._responseHandlers = {};
 
   return self;
 }
@@ -191,7 +196,26 @@ NetbiosNameService.prototype._onUdpMsg = function(msg, rinfo) {
       return;
     }
 
-    self._onNetbiosMsg(nbmsg, rinfo.address);
+    self._onNetbiosMsg(nbmsg, self._sendUdpMsg.bind(self, rinfo.address,
+                                                    rinfo.port));
+  });
+};
+
+NetbiosNameService.prototype._sendUdpMsg = function(address, port, msg) {
+  var self = this;
+
+  // create a maximum sized buffer
+  //  - 576 for recommended MTU minus IP/UDP header space
+  var maxSize = 576 - 20 - 8;
+  var buf = new Buffer(maxSize);
+
+  pack(buf, msg, function(error, len) {
+    if (error) {
+      self.emit('error', error);
+      return;
+    }
+
+    self._udpSocket.send(buf, 0, len, port, address);
   });
 };
 
@@ -204,11 +228,62 @@ NetbiosNameService.prototype._onTcpConnect = function(socket) {
 
   stream.on('error', self.emit.bind(self, 'error'));
   stream.on('message', function(msg) {
-    // TODO: pass some kind of response function handler to _onNetbiosMsg()
-    self._onNetbiosMsg(msg, socket.address()['address']);
+    self._onNetbiosMsg(msg, stream.write.bind(stream));
   });
 };
 
-NetbiosNameService.prototype._onNetbiosMsg = function(msg, fromAddress) {
-  // TODO: handle different NetBIOS messages
+NetbiosNameService.prototype._onNetbiosMsg = function(msg, sendFunc) {
+  if (msg.response) {
+    _onResponse(msg, sendFunc);
+  } else {
+    _onRequest(msg, sendFunc);
+  }
+};
+
+NetbiosNameService.prototype._onResponse = function(msg, sendFunc) {
+  // If we are expecting this response, then process it appropriately.  Ignore
+  // spurious responses we are not expecting.
+  var handler = this._responseHandlers[msg.transactionId];
+  if (typeof handler === 'function') {
+    handler(msg, sendFunc);
+  }
+};
+
+NetbiosNameService.prototype._onRequest = function(msg, sendFunc) {
+  switch (msg.op) {
+    case 'query':
+      this._onQuery(msg, sendFunc);
+      break;
+    case 'registration':
+      this._onRegistration(msg, sendFunc);
+      break;
+    case 'release':
+      this._onRelease(msg, sendFunc);
+      break;
+    case 'wack':
+      // do nothing
+      break;
+    case 'refresh':
+      this._onRefresh(msg, sendFunc);
+      break;
+    default:
+      // do nothing
+      break;
+  }
+};
+
+NetbiosNameService.prototype._onQuery = function(msg, sendFunc) {
+  // TODO: implement query handler
+};
+
+NetbiosNameService.prototype._onRegistration = function(msg, sendFunc) {
+  // TODO: implement registration handler
+};
+
+NetbiosNameService.prototype._onRelease = function(msg, sendFunc) {
+  // TODO: implement release handler
+};
+
+NetbiosNameService.prototype._onRefresh = function(msg, sendFunc) {
+  // TODO: implement refresh handler
 };

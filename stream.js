@@ -39,6 +39,8 @@ function NetbiosNameServiceStream(socket) {
            ? this
            : Object.create(NetbiosNameServiceStream.prototype);
 
+  EventEmitter.call(self);
+
   self._socket = socket;
   self._socket.on('drain', self.emit.bind('drain'));
 
