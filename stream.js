@@ -1,6 +1,32 @@
+// Copyright (c) 2013, Benjamin J. Kelly ("Author")
+// All rights reserved.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice, this
+//    list of conditions and the following disclaimer.
+// 2. Redistributions in binary form must reproduce the above copyright notice,
+//    this list of conditions and the following disclaimer in the documentation
+//    and/or other materials provided with the distribution.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+// ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+// ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+// (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+// ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 'use strict';
 
 module.exports = NetbiosNameServiceStream;
+
+var pack = require('./pack');
+var unpack = require('./unpack');
 
 var EventEmitter = require('events').EventEmitter;
 var Readable = require('readable-stream');
@@ -14,34 +40,78 @@ function NetbiosNameServiceStream(socket) {
            : Object.create(NetbiosNameServiceStream.prototype);
 
   self._socket = socket;
+
   self._stream = new Readable();
   self._stream.wrap(self._socket);
+
+  self._length = null;
+  self._readFunc = self._readLength.bind(self);
 
   return self;
 }
 
-// Events:
-//  - message
+NetbiosNameServiceStream.prototype.start = function() {
+  this._read();
+};
 
 NetbiosNameServiceStream.prototype.write = function(netbiosMsg, callback) {
+  var self = this;
 
-  // allocate max allowed length buffer for message
-  //  - 2 bytes for the length and (2^16 - 1) bytes for the message
-  var buf = new Buffer(2 + 65535);
+  // allocate max allowed length buffer for message:  (2^16 - 1) bytes
+  var msgBuf = new Buffer(65535);
 
-  // skip 16-bit length field for now
+  // pack the netbios message into the buffer
+  pack(msgBuf, netbiosMsg, function(error, len) {
+    if (error) {
+      self.emit('error', error);
+      return;
+    }
 
-  // write netbios message
+    // pack 16-bit length field now that we know the message size
+    var lenBuf = new Buffer(2);
+    lenBuf.writeUInt16BE(len, 0);
 
-  // write 16-bit length field now that we know the message size
+    self._socket.write(lenBuf);
+    self._socket.write(msgBuf.slice(0, len), null, callback);
+  });
 };
 
 NetbiosNameServiceStream.prototype._read = function() {
-  // read 16-bit length field
+  // drain all data from input stream
+  while(this._readFunc());
 
-  // read the specified number of bytes
+  this._stream.once('readable', this._read.bind(this));
+};
 
-  // unpack the netbios message
+NetbiosNameServiceStream.prototype._readLength = function() {
+  var buf = this._stream.read(2);
 
-  // emit the netbios message
+  if (buf) {
+    this._length = buf.readUInt16BE(0);
+    this._readFunc = this._readMessage.bind(this);
+
+    return true;
+  }
+
+  return false;
+};
+
+NetbiosNameServiceStream.prototype._readMessage = function() {
+  var self = this;
+  var buf = self._stream.read(self._length);
+  if (buf) {
+    self._length = null;
+    self._readFunc = self._readLength.bind(self);
+
+    unpack(buf, function(error, len, msg) {
+      if (error) {
+        self.emit('error', error);
+        return;
+      }
+
+      self.emit('message', msg);
+    });
+
+    return true;
+  }
 };
