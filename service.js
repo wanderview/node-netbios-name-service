@@ -36,6 +36,8 @@ var unpack = require('./unpack');
 
 util.inherits(NetbiosNameService, EventEmitter);
 
+// TODO: implement cache timeouts
+
 function NetbiosNameService(options) {
   var self = this instanceof NetbiosNameService
            ? this
@@ -59,6 +61,11 @@ function NetbiosNameService(options) {
     self._udpSocket = options.udpSocket;
   }
 
+  self._localType = options.localType || 'broadcast';
+  self._localAddress = options.localAddress || '127.0.0.1';
+
+  self._localNames = {};
+  self._cache = {};
   self._responseHandlers = {};
 
   return self;
@@ -273,17 +280,96 @@ NetbiosNameService.prototype._onRequest = function(msg, sendFunc) {
 };
 
 NetbiosNameService.prototype._onQuery = function(msg, sendFunc) {
-  // TODO: implement query handler
+  var q = msg.questions[0];
+  var qName = q.name + '-' + q.suffix;
+
+  var localEntry = this._localNames[qName];
+  if (localEntry) {
+    var response = {
+      transactionId: msg.transactionId,
+      response: true,
+      op: msg.op,
+      authoritative: true,
+      answerRecords: [{
+        name: localEntry.name,
+        suffix: localEntry.suffix,
+        type: q.type,
+        ttl: localEntry.ttl,
+      }]
+    };
+    var ans = response.answerRecords[0];
+    if (q.type === 'nb') {
+      ans.nb = {
+        entries: [{
+          type: localEntry.type,
+          address: localEntry.address,
+          group: localEntry.group
+        }]
+      };
+    } else if (q.type === 'nbstat') {
+      // TODO: implement nbstat response
+      ans.nbstat = { nodes: [] };
+    }
+    sendFunc(response);
+  }
 };
 
 NetbiosNameService.prototype._onRegistration = function(msg, sendFunc) {
-  // TODO: implement registration handler
+  var rec = msg.additionalRecords[0];
+  var remoteName = rec.name + '-' + rec.suffix;
+
+  // Check to see if we have this name claimed.  If both the local and remote
+  // names are registered as a group, then there is no conflict.
+  var localEntry = this._localNames[remoteName];
+  if (localEntry &&
+      (!localEntry.group || !rec.nb.entries[0].group)) {
+
+    // Send a conflict response
+    var response = {
+      transactionId: msg.transactionId,
+      response: true,
+      op: msg.op,
+      authoritative: true,
+      error: 'active',
+      answerRecords: [{
+        name: localEntry.name,
+        suffix: localEntry.suffix,
+        type: 'nb',
+        ttl: 0,
+        nb: { entries: [{type: localEntry.type,
+                         address: localEntry.address,
+                         group: localEntry.group}] }
+      }]
+    };
+    sendFunc(response);
+  }
 };
 
 NetbiosNameService.prototype._onRelease = function(msg, sendFunc) {
   // TODO: implement release handler
+  var rec = msg.additionalRecords[0];
+  var remoteName = rec.name + '-' + rec.suffix;
 };
 
 NetbiosNameService.prototype._onRefresh = function(msg, sendFunc) {
-  // TODO: implement refresh handler
+  var rec = msg.additionalRecords[0];
+  var remoteName = rec.name + '-' + rec.suffix;
+
+  // To be safe, ignore refresh requests for names we think we own.  This
+  // shouldn't happen in theory.
+  var localEntry = this._localNames[remoteName];
+  if (!localEntry) {
+    var cacheEntry = this._cache[remoteName];
+    if (!cacheEntry) {
+      cacheEntry = {
+        name: rec.name,
+        suffix: suffix.name
+      };
+      this._cache[remoteName] = cacheEntry;
+    }
+    cacheEntry['ttl'] = rec.ttl;
+    cacheEntry['type'] = rec.nb.entries[0].type;
+    cacheEntry['address'] = rec.nb.entries[0].address;
+    cacheEntry['group'] = rec.nb.entries[0].group;
+  }
 };
