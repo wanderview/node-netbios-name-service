@@ -129,7 +129,7 @@ function nbstatRDataWriter(buf, offset, nameMap, record, callback) {
 
   // write each node - use C style for loop instead of closure style
   // for easy return on error
-  for (var i = 0; i < record.nbstat.nodes.length; ++i) {
+  for (var i = 0, n = record.nbstat.nodes.length; i < n; ++i) {
     var node = record.nbstat.nodes[i];
 
     // 15-byte un-encoded name
@@ -341,17 +341,19 @@ module.exports = function(buf, message, callback) {
     { arr: message.additionalRecords, func: packResourceRecord }
   ];
 
-  for (var p = 0; p < toPack.length && !gError; ++p) {
+  for (var p = 0, n = toPack.length; p < n && !gError; ++p) {
     var arr = toPack[p].arr;
-    for (var a = 0; arr && a < arr.length && !gError; ++a) {
-      toPack[p].func(buf, bytes, nameMap, arr[a], function(error, rLen) {
-        if (error) {
-          gError = error;
-          return;
-        }
+    if (arr) {
+      for (var a = 0, m = arr.length; a < m && !gError; ++a) {
+        toPack[p].func(buf, bytes, nameMap, arr[a], function(error, rLen) {
+          if (error) {
+            gError = error;
+            return;
+          }
 
-        bytes += rLen;
-      });
+          bytes += rLen;
+        });
+      }
     }
   }
 

@@ -99,7 +99,7 @@ NetbiosNameServiceStream.prototype.write = function(netbiosMsg, callback) {
 
 NetbiosNameServiceStream.prototype._read = function() {
   // drain all data from input stream
-  while(this._readFunc());
+  while (this._readFunc());
 
   this._stream.once('readable', this._read.bind(this));
 };

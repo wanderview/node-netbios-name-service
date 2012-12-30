@@ -382,8 +382,8 @@ module.exports = function(buf, callback) {
     { len: arcount, func: parseResourceRecord, arr: message.additionalRecords }
   ];
 
-  for (var p = 0; p < toParse.length && !gError; ++p) {
-    for(var i = 0; i < toParse[p].len && !gError; ++i) {
+  for (var p = 0, n = toParse.length; p < n && !gError; ++p) {
+    for (var i = 0, m = toParse[p].len; i < m && !gError; ++i) {
       toParse[p].func(buf, bytes, function(error, rLen, record) {
         if (error) {
           gError = error;
