@@ -17,7 +17,7 @@ var RR_TYPE_TO_PARSER = {
 //  - 16-bit question class
 function parseQuestion(buf, offset, callback) {
   var bytes = 0;
-  var question = {};
+  var question = Object.create(null);
 
   //  - variable length compressed question name
   unpackName(buf, offset + bytes, function(error, nameBytes, name, suffix) {
@@ -82,7 +82,7 @@ function parseResourceRecord(buf, offset, callback) {
 
     bytes += nLen;
 
-    var record = {};
+    var record = Object.create(null);
     record.name = name;
     record.suffix = suffix;
 
@@ -198,7 +198,7 @@ function nbRDataParser(buf, offset, length, record, callback) {
   var bytes = 0;
 
   while (bytes < length) {
-    var entry = {};
+    var entry = Object.create(null);
     entry.flags = buf.readUInt16BE(offset + bytes);
     bytes += 2;
 
@@ -229,7 +229,7 @@ function nbstatRDataParser(buf, offset, length, record, callback) {
   // Read each node name
   var nodes = [];
   for (var i = 0; i < numNames; ++i) {
-    var node = {};
+    var node = Object.create(null);
 
     // 15-byte un-encoded netbios name.  This is the only place we do not
     // use encoded compressed names.
@@ -298,7 +298,7 @@ function inetToString(inet) {
 // Note, the message must start at the beginning of the buffer.
 module.exports = function(buf, callback) {
   var gError = null;
-  var message = {};
+  var message = Object.create(null);
   var bytes = 0;
 
   // Parse the netbios packet header with the following structure:

@@ -329,7 +329,7 @@ module.exports = function(buf, message, callback) {
   bytes += 2;
 
   var gError = null;
-  var nameMap = {};
+  var nameMap = Object.create(null);
 
   // The rest of the packet consists of 4 sequentially packed arrays.  The
   // first contains questions and the remaining three contain resource

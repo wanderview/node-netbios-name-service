@@ -45,7 +45,7 @@ function NetbiosNameService(options) {
 
   EventEmitter.call(self);
 
-  options = options || {};
+  options = options || Object.create(null);
 
   self._tcpDisable = options.tcpDisable;
   if (!self._tcpDisable) {
@@ -64,9 +64,9 @@ function NetbiosNameService(options) {
   self._localType = options.localType || 'broadcast';
   self._localAddress = options.localAddress || '127.0.0.1';
 
-  self._localNames = {};
-  self._cache = {};
-  self._responseHandlers = {};
+  self._localNames = Object.create(null);
+  self._cache = Object.create(null);
+  self._responseHandlers = Object.create(null);
 
   return self;
 }
