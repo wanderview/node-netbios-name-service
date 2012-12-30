@@ -113,24 +113,24 @@ NetbiosNameServiceCache.prototype.remove = function(name, suffix) {
 NetbiosNameServiceCache.prototype._remove = function(mapName) {
   var entry = this._map[mapName];
   if (entry) {
-    this._map[mapName] = undefined;
+    delete this._map[mapName];
     this._count -= 1;
 
-    if (this._count < 1 && this._timerId) {
-      timers.clearTimeout(this._timerId);
-      this._timerId = null;
+    if (this._count < 1) {
+      this._clearTimer();
     }
   }
-}
+};
 
 NetbiosNameServiceCache.prototype.clear = function() {
-  for (var mapName in this._map) {
-    this._remove(mapName);
-  }
+  this._map = Object.create(null);
+  this._count = 0;
+  this._clearTimer();
 };
 
 NetbiosNameServiceCache.prototype._onTimer = function() {
   this.timerId = null;
+
   for (var mapName in this._map) {
     var entry = this._map[mapName];
     entry.ttl -= TIMER_DELAY_S;
@@ -141,5 +141,12 @@ NetbiosNameServiceCache.prototype._onTimer = function() {
 
   if (this._count > 0 && this._enableTimeouts) {
     this.timerId = timers.setTimeout(this._onTimer.bind(this), TIMER_DELAY_MS);
+  }
+};
+
+NetbiosNameServiceCache.prototype._clearTimer = function() {
+  if (this._timerId) {
+    timers.clearTimeout(this._timerId);
+    this._timerId = null;
   }
 };
