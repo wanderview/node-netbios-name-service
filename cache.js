@@ -57,7 +57,7 @@ NetbiosNameServiceCache.prototype.getAll = function() {
     results.push(this._get(mapName));
   }
   return results;
-}
+};
 
 NetbiosNameServiceCache.prototype._get = function(mapName) {
   var entry = this._map[mapName];
@@ -77,6 +77,11 @@ NetbiosNameServiceCache.prototype._get = function(mapName) {
   }
 
   return null;
+};
+
+NetbiosNameServiceCache.prototype.contains = function(name, suffix) {
+  var mapName = name + '-' + suffix;
+  return (this._map[mapName] !== undefined);
 };
 
 NetbiosNameServiceCache.prototype.update = function(record) {
