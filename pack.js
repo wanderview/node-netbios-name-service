@@ -26,8 +26,9 @@
 module.exports = pack;
 
 var con = require('./constant');
-var ipv4 = require('./ipv4-util');
 var nbname = require('netbios-name');
+
+var ip = require('ip');
 
 // TODO: properly handle truncation and truncate flag due to buffer limits
 
@@ -235,8 +236,8 @@ function aRDataWriter(buf, offset, nameMap, record, callback) {
   bytes += 2;
 
   // Write the IP address out
-  var inet = ipv4.inet_aton(record.a.address);
-  buf.writeUInt32BE(inet, offset + bytes);
+  var inet = ip.toBuffer(record.a.address);
+  inet.copy(buf, offset + bytes);
   bytes += 4;
 
   callback(null, bytes);
@@ -284,8 +285,8 @@ function nbRDataWriter(buf, offset, nameMap, record, callback) {
     bytes += 2;
 
     // 32-bit IP address
-    var inet = ipv4.inet_aton(entry.address);
-    buf.writeUInt32BE(inet, offset + bytes);
+    var inet = ip.toBuffer(entry.address);
+    inet.copy(buf, offset + bytes);
     bytes += 4;
   });
 

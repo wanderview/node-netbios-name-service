@@ -26,8 +26,9 @@
 module.exports = unpack;
 
 var con = require('./constant');
-var ipv4 = require('./ipv4-util');
 var unpackName = require('netbios-name/unpack');
+
+var ip = require('ip');
 
 function unpack(buf, callback) {
   var gError = null;
@@ -276,7 +277,7 @@ function aRDataParser(buf, offset, length, record, callback) {
 
   var bytes = 0;
 
-  var address = ipv4.inet_ntoa(buf.readUInt32BE(offset + bytes));
+  var address = ip.toString(buf.slice(offset + bytes, offset + bytes + 4));
   bytes += 4;
 
   record.a = {
@@ -343,7 +344,7 @@ function nbRDataParser(buf, offset, length, record, callback) {
     var ont = (entry.flags & con.NB_FLAG_ONT) >> 13;
     entry.type = con.ONT_TO_STRING[ont];
 
-    entry.address = ipv4.inet_ntoa(buf.readUInt32BE(offset + bytes));
+    entry.address = ip.toString(buf.slice(offset + bytes, offset + bytes + 4));
     bytes += 4;
 
     entries.push(entry);

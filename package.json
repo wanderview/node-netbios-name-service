@@ -4,6 +4,7 @@
   "author": "Ben Kelly <ben@wanderview.com>",
   "license": "BSD",
   "dependencies": {
+    "ip": "~0.0.1",
     "netbios-name": "~0.1.0",
     "readable-stream": "~0.1.0"
   },
