@@ -25,6 +25,7 @@
 
 module.exports = NetbiosNameServiceCache;
 
+var decompose = require('netbios-name/decompose');
 var timers = require('timers');
 
 var TIMER_DELAY_S = 1;
@@ -47,19 +48,8 @@ function NetbiosNameServiceCache(options) {
   return self;
 }
 
-NetbiosNameServiceCache.prototype.get = function(name, suffix) {
-  return this._get(name + '-' + suffix);
-};
-
-NetbiosNameServiceCache.prototype.getAll = function() {
-  var results = [];
-  for (var mapName in this._map) {
-    results.push(this._get(mapName));
-  }
-  return results;
-};
-
-NetbiosNameServiceCache.prototype._get = function(mapName) {
+NetbiosNameServiceCache.prototype.getNb = function(name, suffix) {
+  var mapName = name + '-' + suffix;
   var entry = this._map[mapName];
   if (entry) {
     var record = {
@@ -77,6 +67,41 @@ NetbiosNameServiceCache.prototype._get = function(mapName) {
   }
 
   return null;
+};
+
+NetbiosNameServiceCache.prototype.getNbstat = function(name, suffix) {
+  var nodes = [];
+  for (var mapName in this._map) {
+    var entry = this._map[mapName];
+
+    // filter based on scope ID according to 15.1.4 in RFC1001
+    decompose(name, function(error, nb1, scopeId1) {
+      if (!error) {
+        decompose(entry.name, function(error, nb2, scopeId2) {
+          if (!error && scopeId1 === scopeId2) {
+            var node = {
+              name: entry.name,
+              suffix: entry.suffix,
+              type: entry.type,
+              group: entry.group,
+              active: true
+            };
+            nodes.push(node);
+          }
+        });
+      }
+    });
+  }
+
+  var record = {
+    name: name,
+    suffix: suffix,
+    type: 'nbstat',
+    ttl: 0,
+    nbstat: { nodes: nodes }
+  };
+
+  return record;
 };
 
 NetbiosNameServiceCache.prototype.contains = function(name, suffix) {

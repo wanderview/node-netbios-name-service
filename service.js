@@ -287,20 +287,22 @@ NetbiosNameService.prototype._onRequest = function(msg, sendFunc) {
 NetbiosNameService.prototype._onQuery = function(msg, sendFunc) {
   var q = msg.questions[0];
 
+  var answer = null;
   if (q.type === 'nb') {
-    var answer = this._localNames.get(q.name, q.suffix);
-    if (answer) {
-      var response = {
-        transactionId: msg.transactionId,
-        response: true,
-        op: msg.op,
-        authoritative: true,
-        answerRecords: [answer]
-      };
-      sendFunc(response);
-    }
+    answer = this._localNames.getNb(q.name, q.suffix);
   } else if (q.type === 'nbstat') {
-    // TODO: implement nbstat response
+    answer = this._localNames.getNbstats(q.name, q.suffix);
+  }
+
+  if (answer) {
+    var response = {
+      transactionId: msg.transactionId,
+      response: true,
+      op: msg.op,
+      authoritative: true,
+      answerRecords: [answer]
+    };
+    sendFunc(response);
   }
 };
 
@@ -309,7 +311,7 @@ NetbiosNameService.prototype._onRegistration = function(msg, sendFunc) {
 
   // Check to see if we have this name claimed.  If both the local and remote
   // names are registered as a group, then there is no conflict.
-  var localRec = this._localNames.get(rec.name, rec.suffix);
+  var localRec = this._localNames.getNb(rec.name, rec.suffix);
   if (localRec &&
       (!localRec.nb.entries[0].group || !rec.nb.entries[0].group)) {
 
