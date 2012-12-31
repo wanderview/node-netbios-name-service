@@ -337,11 +337,11 @@ function nbRDataParser(buf, offset, length, record, callback) {
 
   while (bytes < length) {
     var entry = Object.create(null);
-    entry.flags = buf.readUInt16BE(offset + bytes);
+    var flags = buf.readUInt16BE(offset + bytes);
     bytes += 2;
 
-    entry.group = ((entry.flags & con.NB_FLAG_G) !== 0);
-    var ont = (entry.flags & con.NB_FLAG_ONT) >> 13;
+    entry.group = ((flags & con.NB_FLAG_G) !== 0);
+    var ont = (flags & con.NB_FLAG_ONT) >> 13;
     entry.type = con.ONT_TO_STRING[ont];
 
     entry.address = ip.toString(buf.slice(offset + bytes, offset + bytes + 4));
@@ -379,16 +379,16 @@ function nbstatRDataParser(buf, offset, length, record, callback) {
     node.suffix = buf.readUInt8(offset + bytes);
     bytes += 1;
 
-    node.flags = buf.readUInt16BE(offset + bytes);
+    var flags = buf.readUInt16BE(offset + bytes);
     bytes += 2;
 
-    node.permanent = (node.flags & con.NAME_FLAG_PRM) !== 0;
-    node.active = (node.flags & con.NAME_FLAG_ACT) !== 0;
-    node.conflict = (node.flags & con.NAME_FLAG_CNF) !== 0;
-    node.deregister = (node.flags & con.NAME_FLAG_DRG) !== 0;
-    var ont = (node.flags & con.NAME_FLAG_ONT) >> 13;
+    node.permanent = (flags & con.NAME_FLAG_PRM) !== 0;
+    node.active = (flags & con.NAME_FLAG_ACT) !== 0;
+    node.conflict = (flags & con.NAME_FLAG_CNF) !== 0;
+    node.deregister = (flags & con.NAME_FLAG_DRG) !== 0;
+    var ont = (flags & con.NAME_FLAG_ONT) >> 13;
     node.type = con.ONT_TO_STRING[ont];
-    node.group = (node.flags & con.NAME_FLAG_G) !== 0;
+    node.group = (flags & con.NAME_FLAG_G) !== 0;
 
     nodes.push(node);
   }
