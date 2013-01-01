@@ -20,7 +20,7 @@ module.exports.testService = function(test) {
 };
 
 module.exports.testRegistrationConflict = function(test) {
-  test.expect(6);
+  test.expect(7);
 
   var name = 'foobar.example.com';
   var suffix = 0x20;
@@ -28,16 +28,7 @@ module.exports.testRegistrationConflict = function(test) {
   // we are going to mock send and receive, so disable network features
   var service = new Service({ tcpDisable: true, udpDisable: true });
 
-  var record = {
-    name: name,
-    suffix: suffix,
-    type: 'nb',
-    nb: {
-      entries: [{ address: '127.0.0.1', type: 'broadcast', group: false }]
-    }
-  };
-
-  service._localNames.update(record);
+  addToCache(service._localNames, name, suffix, false);
 
   var request = {
     transactionId: 12345,
@@ -54,6 +45,7 @@ module.exports.testRegistrationConflict = function(test) {
 
   service._onNetbiosMsg(request, function(msg) {
     test.ok(msg.response);
+    test.equal(msg.transactionId, request.transactionId);
     test.equal(msg.op, 'registration');
     test.equal(msg.error, 'active');
     test.equal(msg.answerRecords.length, 1);
@@ -95,3 +87,130 @@ module.exports.testRegistrationNoConflict = function(test) {
     test.done();
   });
 };
+
+module.exports.testQueryNb = function(test) {
+  test.expect(8);
+
+  var service = new Service({ tcpDisable: true, udpDisable: true });
+
+  var name = 'foobar.example.com';
+  var suffix = 0x20;
+  var group = false;
+
+  addToCache(service._localNames, name, suffix, group);
+
+  var request = {
+    transactionId: 67890,
+    op: 'query',
+    recursionDesired: true,
+    questions: [
+      { name: name, suffix: suffix, type: 'nb', group: group }
+    ]
+  };
+
+  service._onNetbiosMsg(request, function(msg) {
+    test.ok(msg.response);
+    test.equal(msg.transactionId, request.transactionId);
+    test.equal(msg.op, 'query');
+    test.ok(!msg.error);
+    test.equal(msg.answerRecords.length, 1);
+    test.equal(msg.answerRecords[0].name, name);
+    test.equal(msg.answerRecords[0].suffix, suffix);
+    test.equal(msg.answerRecords[0].type, 'nb');
+    test.done();
+  });
+};
+
+module.exports.testQueryNbMissing = function(test) {
+  test.expect(1);
+
+  var service = new Service({ tcpDisable: true, udpDisable: true });
+
+  var name = 'foobar.example.com';
+  var suffix = 0x20;
+  var group = false;
+
+  var request = {
+    transactionId: 67890,
+    op: 'query',
+    recursionDesired: true,
+    questions: [
+      { name: name, suffix: suffix, type: 'nb', group: group }
+    ]
+  };
+
+  var gotMsg = false;
+  service._onNetbiosMsg(request, function(msg) {
+    gotMsg = true;
+  });
+
+  process.nextTick(function() {
+    test.ok(!gotMsg);
+    test.done();
+  });
+};
+
+module.exports.testQueryNbstat = function(test) {
+  test.expect(11);
+
+  var service = new Service({ tcpDisable: true, udpDisable: true });
+
+  var names = [
+    'foobar.example.com',
+    'snafu.example.com',
+    'foobar',
+    'snafu'
+  ];
+  var suffix = 0x20;
+  var group = false;
+
+  names.forEach(function(name) {
+    addToCache(service._localNames, name, suffix, group);
+  });
+
+  var request = {
+    transactionId: 89012,
+    op: 'query',
+    recursionDesired: true,
+    questions: [
+      { name: names[0], suffix: suffix, type: 'nbstat', group: group }
+    ]
+  };
+
+  service._onNetbiosMsg(request, function(msg) {
+    test.ok(msg.response);
+    test.equal(msg.transactionId, request.transactionId);
+    test.equal(msg.op, 'query');
+    test.ok(!msg.error);
+    test.equal(msg.answerRecords.length, 1);
+    var answer = msg.answerRecords[0];
+    test.equal(answer.name, names[0]);
+    test.equal(answer.suffix, suffix);
+    test.equal(answer.type, 'nbstat');
+
+    // we should only get the first two names because the results are filtered
+    // by the requested scope ID
+    test.equal(answer.nbstat.nodes.length, 2);
+    var foundNames = {};
+    answer.nbstat.nodes.forEach(function(node) {
+      foundNames[node.name] = true;
+    });
+    test.ok(foundNames[names[0]]);
+    test.ok(foundNames[names[1]]);
+
+    test.done();
+  });
+};
+
+function addToCache(cache, name, suffix, group) {
+  var record = {
+    name: name,
+    suffix: suffix,
+    type: 'nb',
+    nb: {
+      entries: [{ address: '127.0.0.1', type: 'broadcast', group: group }]
+    }
+  };
+
+  cache.update(record);
+}
