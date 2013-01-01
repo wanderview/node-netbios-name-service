@@ -246,9 +246,9 @@ NetbiosNameService.prototype._onTcpConnect = function(socket) {
 
 NetbiosNameService.prototype._onNetbiosMsg = function(msg, sendFunc) {
   if (msg.response) {
-    _onResponse(msg, sendFunc);
+    this._onResponse(msg, sendFunc);
   } else {
-    _onRequest(msg, sendFunc);
+    this._onRequest(msg, sendFunc);
   }
 };
 
@@ -285,7 +285,10 @@ NetbiosNameService.prototype._onRequest = function(msg, sendFunc) {
 };
 
 NetbiosNameService.prototype._onQuery = function(msg, sendFunc) {
-  var q = msg.questions[0];
+  var q = msg.questions ? msg.questions[0] : null;
+  if (!q) {
+    return;
+  }
 
   var answer = null;
   if (q.type === 'nb') {
@@ -307,7 +310,10 @@ NetbiosNameService.prototype._onQuery = function(msg, sendFunc) {
 };
 
 NetbiosNameService.prototype._onRegistration = function(msg, sendFunc) {
-  var rec = msg.additionalRecords[0];
+  var rec = msg.additionalRecords ? msg.additionalRecords[0] : null;
+  if (!rec) {
+    return;
+  }
 
   // Check to see if we have this name claimed.  If both the local and remote
   // names are registered as a group, then there is no conflict.
