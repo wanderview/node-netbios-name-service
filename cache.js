@@ -109,16 +109,36 @@ NetbiosNameServiceCache.prototype.contains = function(name, suffix) {
   return (this._map[mapName] !== undefined);
 };
 
+NetbiosNameServiceCache.prototype.add = function(name, suffix, group, address,
+                                                 ttl, type) {
+  var mapName = name + '-' + suffix;
+
+  var entry = Object.create(null);
+  entry.name = name;
+  entry.suffix = suffix;
+  entry.ttl = ttl;
+  entry.address = address;
+  entry.group = group;
+  entry.type = type;
+
+  if (!this._map[mapName]) {
+    this._count += 1;
+  }
+
+  this._map[mapName] = entry;
+
+  this._setTimer();
+};
+
 NetbiosNameServiceCache.prototype.update = function(record) {
   var mapName = record.name + '-' + record.suffix;
 
   var entry = this._map[mapName];
   if (!entry) {
-    entry = Object.create(null);
-    entry.name = record.name;
-    entry.suffix = record.suffix;
-    this._map[mapName] = entry;
-    this._count += 1;
+    this.add(record.name, record.suffix, record.nb.entries[0].group,
+             record.nb.entries[0].address, record.ttl,
+             record.nb.entries[0].type);
+    return;
   }
 
   entry.ttl = record.ttl;
@@ -126,9 +146,7 @@ NetbiosNameServiceCache.prototype.update = function(record) {
   entry.address = record.nb.entries[0].address;
   entry.group = record.nb.entries[0].group;
 
-  if (!this._timerId && this._enableTimeouts) {
-    this._timerId = timers.setTimeout(this._onTimer.bind(this), TIMER_DELAY_MS);
-  }
+  this._setTimer();
 };
 
 NetbiosNameServiceCache.prototype.remove = function(name, suffix) {
@@ -164,7 +182,11 @@ NetbiosNameServiceCache.prototype._onTimer = function() {
     }
   }
 
-  if (this._count > 0 && this._enableTimeouts) {
+  this._setTimer();
+};
+
+NetbiosNameServiceCache.prototype._setTimer = function() {
+  if (this._count > 0 && !this._timerId && this._enableTimeouts) {
     this.timerId = timers.setTimeout(this._onTimer.bind(this), TIMER_DELAY_MS);
   }
 };

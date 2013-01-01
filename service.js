@@ -28,12 +28,17 @@ module.exports = NetbiosNameService;
 var EventEmitter = require('events').EventEmitter;
 var dgram = require('dgram');
 var net = require('net');
+var timers = require('timers');
 var util = require('util');
 
 var Cache = require('./cache');
 var Stream = require('./stream');
 var pack = require('./pack');
 var unpack = require('./unpack');
+
+var BCAST_RETRY_DELAY_MS = 250;
+var BCAST_RETRY_COUNT = 3;
+var UDP_PORT = 137;
 
 util.inherits(NetbiosNameService, EventEmitter);
 
@@ -55,17 +60,19 @@ function NetbiosNameService(options) {
 
   self._udpDisable = options.udpDisable;
   if (!self._udpDisable) {
-    self._udpPort = options.udpPort || 137;
+    self._udpPort = options.udpPort || UDP_PORT;
     self._udpAddress = options.udpAddress;
     self._udpSocket = options.udpSocket;
   }
 
-  self._localType = options.localType || 'broadcast';
-  self._localAddress = options.localAddress || '127.0.0.1';
-
   self._cache = new Cache();
   self._localNames = new Cache({enableTimeouts: false});
   self._responseHandlers = Object.create(null);
+
+  self._type = 'broadcast';
+
+  var now = new Date();
+  self._nextTransactionId = now.getTime() & 0xffff;
 
   return self;
 }
@@ -162,29 +169,137 @@ NetbiosNameService.prototype._stopUdp = function(callback) {
   callback();
 };
 
-NetbiosNameService.prototype.register = function(name, suffix, address, callback) {
-  // TODO: implement register
+NetbiosNameService.prototype.add = function(name, suffix, group, address, ttl,
+                                            callback) {
+  var self = this;
+  if (!self._localNames.contains(name, suffix)) {
+    var transactionId = self._newTransactionId();
 
-  // if already in name cache
+    var request = {
+      transactionId: transactionId,
+      op: 'registration',
+      broadcast: true,
+      authoritative: true,
+      recursionDesired: true,
+      questions: [{name: name, suffix: suffix, type: 'nb', group: group}],
+      additionaRecords: [{
+        name: name, suffix: suffix, type: 'nb', ttl: ttl,
+        nb: { entries: [{address: address, type: self._type, group: group}] }
+      }]
+    };
 
-    // ignore or flag as conflict
+    self._responseHandlers[transactionId] = {
+      count: 0,
+      timerId: null,
+      responseFunc: function(response) {
+        delete self._responseHandlers[transactionId];
+        if (typeof callback === 'function') {
+          // negative response
+          if (response.error) {
+            var owner = response.answerRecords[0].nb.entries[0].address;
+            callback(false, owner);
 
-  // if not in name cache
+          // positive response
+          } else {
+            // ignore as this should not happen for 'broadcast' nodes
+          }
+        }
+      },
+      noResponseFunc: function() {
+        delete self._responseHandlers[transactionId];
+        self._localNames.add(name, suffix, group, address, ttl, self._type);
+        self._sendRefresh(name, suffix);
+        if (typeof callback === 'function') {
+          callback(true);
+        }
+      }
+    };
 
-    // send register request
-
-    // save state for response
+    self._sendRequest('255.255.255.255', UDP_PORT, request);
+  }
 };
 
-NetbiosNameService.prototype.unregister = function(name, suffix, callback) {
-  // TODO: implement unregister
+NetbiosNameService.prototype._sendRefresh = function(name, suffix) {
+  var record = this._localNames.getNb(name, suffix);
+  if (!record) {
+    return;
+  }
 
-  // if registered by us
+  var transactionId = this._newTransactionId();
+  var request = {
+    transactionId: transactionId,
+    op: 'refresh',
+    authoritative: true,
+    broadcast: true,
+    recursionDesired: true,
+    questions: [ {name: name, suffix: suffix, type: 'nb',
+                  group: record.nb.entries[0].group} ],
+    additionalRecords: [ record ]
+  };
 
-    // send unregister request
+  this._sendRequest('255.255.255.255', UDP_PORT, request);
 };
 
-NetbiosNameService.prototype.query = function(name, suffix, callback) {
+NetbiosNameService.prototype._newTransactionId = function() {
+  var rtn = this._nextTransactionId;
+
+  // increment transaction ID and wrap if necessary
+  this._nextTransactionId += 1;
+  this._nextTransactionId &= 0xffff;
+
+  return rtn;
+};
+
+NetbiosNameService.prototype._sendRequest = function(address, port, request) {
+  // TODO: support TCP server instead of UDP broadcast
+  this._sendUdpMsg(address, port, request);
+
+  var handler = this._responseHandlers[request.transactionId];
+  if (handler) {
+    handler.timerId = null;
+    handler.count += 1;
+
+    // Schedule another packet if we have not hit the retry limit
+    if (handler.count < BCAST_RETRY_COUNT) {
+      var sendFunc = this._sendRequest.bind(this, address, port, request);
+      handler.timerId = timers.setTimeout(sendFunc, BCAST_RETRY_DELAY);
+
+    // Otherwise send no more requests and handle the "no response" condition
+    } else if (typeof handler.noResponseFunc === 'function') {
+      handler.noResponseFunc();
+    } else {
+      delete this._responseHandlers[request.transactionId];
+    }
+  }
+};
+
+NetbiosNameService.prototype.remove = function(name, suffix, callback) {
+  var record = this._localNames.getNb(name, suffix);
+  if (record) {
+    var transactionId = this._newTransactionId();
+    var request = {
+      transactionId: transactionId,
+      op: 'release',
+      authoritative: true,
+      broadcast: true,
+      recursionDesired: true,
+      questions: [{ name: name, suffix: suffix, type: 'nb',
+                    group: record.nb.entries[0].group }],
+      additionalRecords: [ record ]
+    };
+
+    this._responseHandlers[transactionId] = {
+      count: 0,
+      timerId: null,
+      responseFunc: null,
+      noResponseFunc: callback
+    };
+
+    this._sendRequest('255.255.255.255', UDP_PORT, request);
+  }
+};
+
+NetbiosNameService.prototype.find = function(name, suffix, callback) {
   // TODO: implement query
 
   // if in name cache
@@ -256,8 +371,10 @@ NetbiosNameService.prototype._onResponse = function(msg, sendFunc) {
   // If we are expecting this response, then process it appropriately.  Ignore
   // spurious responses we are not expecting.
   var handler = this._responseHandlers[msg.transactionId];
-  if (typeof handler === 'function') {
-    handler(msg, sendFunc);
+  if (handler && typeof handler.responseFunc === 'function') {
+    timers.clearTimeout(handler.timerId);
+    handler.timerId = null;
+    handler.responseFunc(msg, sendFunc);
   }
 };
 

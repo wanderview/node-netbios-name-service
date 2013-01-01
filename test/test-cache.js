@@ -58,17 +58,7 @@ module.exports.testCacheWithoutTimeout = function(test) {
 
   test.equal(cache.getNb(name, suffix), null);
 
-  var record = {
-    name: name,
-    suffix: suffix,
-    ttl: 2,
-    type: 'nb',
-    nb: {
-      entries: [{ address: '127.0.0.1', type: 'broadcast', group: false }]
-    }
-  };
-
-  cache.update(record);
+  cache.add(name, suffix, false, '127.0.0.1', 2, 'broadcast');
 
   test.notEqual(cache.getNb(name, suffix), null);
 
