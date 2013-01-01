@@ -294,7 +294,7 @@ NetbiosNameService.prototype._onQuery = function(msg, sendFunc) {
   if (q.type === 'nb') {
     answer = this._localNames.getNb(q.name, q.suffix);
   } else if (q.type === 'nbstat') {
-    answer = this._localNames.getNbstats(q.name, q.suffix);
+    answer = this._localNames.getNbstat(q.name, q.suffix);
   }
 
   if (answer) {
