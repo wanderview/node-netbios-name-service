@@ -38,7 +38,10 @@ var unpack = require('./unpack');
 
 var BCAST_RETRY_DELAY_MS = 250;
 var BCAST_RETRY_COUNT = 3;
+var CONFLICT_DELAY_MS = 1000;
 var UDP_PORT = 137;
+
+// TODO: validate packets received before referencing fields
 
 util.inherits(NetbiosNameService, EventEmitter);
 
@@ -169,6 +172,9 @@ NetbiosNameService.prototype._stopUdp = function(callback) {
   callback();
 };
 
+// TODO: Implement periodic refresh message for local names when their TTL
+//       is exhausted.
+
 NetbiosNameService.prototype.add = function(name, suffix, group, address, ttl,
                                             callback) {
   var self = this;
@@ -237,6 +243,9 @@ NetbiosNameService.prototype._sendRefresh = function(name, suffix) {
     additionalRecords: [ record ]
   };
 
+  // This is a one-shot send, so no need for response handlers
+  delete this._responseHandlers[transactionId];
+
   this._sendRequest('255.255.255.255', UDP_PORT, request);
 };
 
@@ -300,19 +309,60 @@ NetbiosNameService.prototype.remove = function(name, suffix, callback) {
 };
 
 NetbiosNameService.prototype.find = function(name, suffix, callback) {
-  // TODO: implement query
+  var self = this;
+  var record = self._cache.getNb(name, suffix);
+  if (record) {
+    if (typeof callback === 'function') {
+      callback(record.nb.entries[0].address);
+    }
+    return;
+  }
 
-  // if in name cache
+  var transactionId = self._newTransactionId();
+  var request = {
+    transactionId: transactionId,
+    op: 'query',
+    broadcast: true,
+    recursionDesired: true,
+    questions: [ { name: name, suffix: suffix, type: 'nb', group: false } ]
+  };
 
-    // send status request
+  self._responseHandlers[transactionId] = {
+    count: 0,
+    timerId: null,
+    noResponseFunc: function() {
+      if (typeof callback === 'function') {
+        callback(null);
+      }
+    },
+    responseFunc: function(response) {
+      var answer = response.answerRecords[0];
+      self._cache.update(answer);
+      var address = answer.nb.entries[0].address;
+      if (typeof callback === 'function') {
+        callback(answer.nb.entries[0].address);
+      }
 
-    // save state for response
+      // If we get another response packet then there is a conflict and we
+      // need to avoid treating this value as authoritative in our cache
+      self._responseHandlers[transactionId].responseFunc = function(response2) {
+        var address2 = answer.nb.entries[0].address;
+        if (address !== address2) {
+          // The RFC says to mark the name as in "conflict", but logically its
+          // the same as being removed.  Just remove it for now.
+          self._cache.remove(name, suffix);
+        }
+      };
 
-  // if not in name cache
+      // We only need to check for the conflicting responses for a limited
+      // time.  After that occurs, clear the response handler.
+      timers.setTimeout(function() {
+        delete self._responseHandlers[transactionId];
+      }, CONFLICT_DELAY_MS);
+    }
+  };
 
-    // send query request
-
-    // save state for response
+  this._sendRequest('255.255.255.255', UDP_PORT, request);
 };
 
 NetbiosNameService.prototype._onUdpMsg = function(msg, rinfo) {
