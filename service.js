@@ -116,24 +116,34 @@ NetbiosNameService.prototype._startTcp = function(callback) {
 };
 
 NetbiosNameService.prototype._startUdp = function(callback) {
-  if (!this._udpDisable) {
+  var self = this;
+  if (!self._udpDisable) {
     var needBind = false;
-    if (!this._udpSocket) {
-      this._udpSocket = dgram.createSocket('udp4');
+    if (!self._udpSocket) {
+      self._udpSocket = dgram.createSocket('udp4');
       needBind = true;
+    } else {
+      self._udpSocket.setBroadcast(true);
     }
 
-    this._udpSocket.on('error', this.emit.bind(this, 'error'));
-    this._udpSocket.on('message', this._onUdpMsg.bind(this));
+    self._udpSocket.on('error', self.emit.bind(self, 'error'));
+    self._udpSocket.on('message', self._onUdpMsg.bind(self));
 
     if (needBind) {
-      this._udpSocket.on('listening', callback);
-      this._udpSocket.bind(this._udpPort, this._udpAddress);
+      self._udpSocket.on('listening', function() {
+        self._udpSocket.setBroadcast(true);
+        if (typeof callback === 'function') {
+          callback();
+        }
+      });
+      self._udpSocket.bind(self._udpPort, self._udpAddress);
       return;
     }
   }
 
-  callback();
+  if (typeof callback === 'function') {
+    callback();
+  }
 };
 
 NetbiosNameService.prototype.stop = function(callback) {
@@ -188,7 +198,7 @@ NetbiosNameService.prototype.add = function(name, suffix, group, address, ttl,
       authoritative: true,
       recursionDesired: true,
       questions: [{name: name, suffix: suffix, type: 'nb', group: group}],
-      additionaRecords: [{
+      additionalRecords: [{
         name: name, suffix: suffix, type: 'nb', ttl: ttl,
         nb: { entries: [{address: address, type: self._type, group: group}] }
       }]
@@ -266,12 +276,12 @@ NetbiosNameService.prototype._sendRequest = function(address, port, request) {
   var handler = this._responseHandlers[request.transactionId];
   if (handler) {
     handler.timerId = null;
-    handler.count += 1;
 
     // Schedule another packet if we have not hit the retry limit
     if (handler.count < BCAST_RETRY_COUNT) {
+      handler.count += 1;
       var sendFunc = this._sendRequest.bind(this, address, port, request);
-      handler.timerId = timers.setTimeout(sendFunc, BCAST_RETRY_DELAY);
+      handler.timerId = timers.setTimeout(sendFunc, BCAST_RETRY_DELAY_MS);
 
     // Otherwise send no more requests and handle the "no response" condition
     } else if (typeof handler.noResponseFunc === 'function') {
@@ -367,7 +377,7 @@ NetbiosNameService.prototype.find = function(name, suffix, callback) {
 
 NetbiosNameService.prototype._onUdpMsg = function(msg, rinfo) {
   var self = this;
-  unpack(msg, 0, function(error, len, nbmsg) {
+  unpack(msg, function(error, len, nbmsg) {
     if (error) {
       self.emit('error', error);
       return;
