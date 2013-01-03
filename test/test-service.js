@@ -13,9 +13,8 @@ module.exports.testService = function(test) {
   test.ok(service instanceof Service);
   test.ok(service instanceof EventEmitter);
   service.start(function() {
-    service.stop(function() {
-      test.done();
-    });
+    service.stop();
+    test.done();
   });
 };
 
@@ -51,6 +50,7 @@ module.exports.testRegistrationConflict = function(test) {
     test.equal(msg.answerRecords.length, 1);
     test.equal(msg.answerRecords[0].name, name);
     test.equal(msg.answerRecords[0].suffix, suffix);
+    service.stop();
     test.done();
   });
 };
@@ -84,6 +84,7 @@ module.exports.testRegistrationNoConflict = function(test) {
 
   process.nextTick(function() {
     test.ok(!gotMessage);
+    service.stop();
     test.done();
   });
 };
@@ -117,6 +118,7 @@ module.exports.testQueryNb = function(test) {
     test.equal(msg.answerRecords[0].name, name);
     test.equal(msg.answerRecords[0].suffix, suffix);
     test.equal(msg.answerRecords[0].type, 'nb');
+    service.stop();
     test.done();
   });
 };
@@ -146,6 +148,7 @@ module.exports.testQueryNbMissing = function(test) {
 
   process.nextTick(function() {
     test.ok(!gotMsg);
+    service.stop();
     test.done();
   });
 };
@@ -198,6 +201,7 @@ module.exports.testQueryNbstat = function(test) {
     test.ok(foundNames[names[0]]);
     test.ok(foundNames[names[1]]);
 
+    service.stop();
     test.done();
   });
 };
@@ -207,6 +211,7 @@ function addToCache(cache, name, suffix, group) {
     name: name,
     suffix: suffix,
     type: 'nb',
+    ttl: 10,
     nb: {
       entries: [{ address: '127.0.0.1', type: 'broadcast', group: group }]
     }

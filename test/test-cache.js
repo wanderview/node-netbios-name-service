@@ -11,6 +11,9 @@ function setTimeout2(delay, callback) {
 module.exports.testCacheWithTimeout = function(test) {
   test.expect(6);
   var cache = new Cache();
+  cache.on('timeout', function(name, suffix) {
+    cache.remove(name, suffix);
+  });
 
   var name = 'foobar';
   var suffix = 0x20;
@@ -44,6 +47,8 @@ module.exports.testCacheWithTimeout = function(test) {
     setTimeout2(2100, function() {
       cacheRecord = cache.getNb(name, suffix);
       test.equal(cacheRecord, null);
+
+      cache.clear();
       test.done();
     });
   });
@@ -52,6 +57,9 @@ module.exports.testCacheWithTimeout = function(test) {
 module.exports.testCacheWithoutTimeout = function(test) {
   test.expect(4);
   var cache = new Cache({enableTimeouts: false});
+  cache.on('timeout', function(name, suffix) {
+    cache.remove(name, suffix);
+  });
 
   var name = 'foobar.example.com';
   var suffix = 0x10;
@@ -67,6 +75,7 @@ module.exports.testCacheWithoutTimeout = function(test) {
     test.notEqual(cacheRecord, null);
     test.equal(cacheRecord.ttl, 2);
 
+    cache.clear();
     test.done();
   });
 };
@@ -108,6 +117,8 @@ module.exports.testCacheNbstat = function(test) {
   var nbstat2 = cache.getNbstat('hmm', suffix);
   test.equal(nbstat2.nbstat.nodes.length, 1);
   test.equal(nbstat2.nbstat.nodes[0].name, name2);
+
+  cache.clear();
 
   test.done();
 };

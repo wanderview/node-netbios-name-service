@@ -26,15 +26,24 @@
 module.exports = NetbiosNameServiceCache;
 
 var decompose = require('netbios-name/decompose');
+
+var EventEmitter = require('events').EventEmitter;
 var timers = require('timers');
+var util = require('util');
+
+util.inherits(NetbiosNameServiceCache, EventEmitter);
 
 var TIMER_DELAY_S = 1;
 var TIMER_DELAY_MS = TIMER_DELAY_S * 1000;
+
+// TODO: for groups this class needs to support multiple addresses per name
 
 function NetbiosNameServiceCache(options) {
   var self = (this instanceof NetbiosNameServiceCache)
            ? this
            : Object.create(NetbiosNameServiceCache.prototype);
+
+  EventEmitter.call(self);
 
   options = options || Object.create(null);
 
@@ -113,47 +122,36 @@ NetbiosNameServiceCache.prototype.add = function(name, suffix, group, address,
                                                  ttl, type) {
   var mapName = name + '-' + suffix;
 
-  var entry = Object.create(null);
+  var entry = this._map[mapName];
+  if (!entry) {
+    entry = Object.create(null);
+  }
+
   entry.name = name;
   entry.suffix = suffix;
   entry.ttl = ttl;
+  entry.maxTtl = ttl;
   entry.address = address;
   entry.group = group;
   entry.type = type;
 
   if (!this._map[mapName]) {
+    this._map[mapName] = entry;
     this._count += 1;
+    this.emit('added', name, suffix);
   }
-
-  this._map[mapName] = entry;
 
   this._setTimer();
 };
 
 NetbiosNameServiceCache.prototype.update = function(record) {
-  var mapName = record.name + '-' + record.suffix;
-
-  var entry = this._map[mapName];
-  if (!entry) {
-    this.add(record.name, record.suffix, record.nb.entries[0].group,
-             record.nb.entries[0].address, record.ttl,
-             record.nb.entries[0].type);
-    return;
-  }
-
-  entry.ttl = record.ttl;
-  entry.type = record.nb.entries[0].type;
-  entry.address = record.nb.entries[0].address;
-  entry.group = record.nb.entries[0].group;
-
-  this._setTimer();
+  this.add(record.name, record.suffix, record.nb.entries[0].group,
+           record.nb.entries[0].address, record.ttl,
+           record.nb.entries[0].type);
 };
 
 NetbiosNameServiceCache.prototype.remove = function(name, suffix) {
-  this._remove(name + '-' + suffix);
-};
-
-NetbiosNameServiceCache.prototype._remove = function(mapName) {
+  var mapName = name + '-' + suffix;
   var entry = this._map[mapName];
   if (entry) {
     delete this._map[mapName];
@@ -162,13 +160,21 @@ NetbiosNameServiceCache.prototype._remove = function(mapName) {
     if (this._count < 1) {
       this._clearTimer();
     }
+
+    this.emit('removed', name, suffix);
   }
 };
 
 NetbiosNameServiceCache.prototype.clear = function() {
-  this._map = Object.create(null);
-  this._count = 0;
-  this._clearTimer();
+  var self = this;
+  var oldMap = self._map;
+  self._map = Object.create(null);
+  Object.keys(oldMap).forEach(function(mapName) {
+    var entry = oldMap[mapName]
+    self.emit('removed', entry.name, entry.suffix);
+  });
+  self._count = 0;
+  self._clearTimer();
 };
 
 NetbiosNameServiceCache.prototype._onTimer = function() {
@@ -178,7 +184,8 @@ NetbiosNameServiceCache.prototype._onTimer = function() {
     var entry = this._map[mapName];
     entry.ttl -= TIMER_DELAY_S;
     if (entry.ttl < 1) {
-      this._remove(mapName);
+      entry.ttl = entry.maxTtl;
+      this.emit('timeout', entry.name, entry.suffix);
     }
   }
 

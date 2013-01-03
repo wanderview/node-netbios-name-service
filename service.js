@@ -69,7 +69,19 @@ function NetbiosNameService(options) {
   }
 
   self._cache = new Cache();
-  self._localNames = new Cache({enableTimeouts: false});
+  self._cache.on('timeout', function(name, suffix) {
+    self._cache.remove(name, suffix);
+  });
+  self._cache.on('added', self.emit.bind(self, 'added'));
+  self._cache.on('removed', self.emit.bind(self, 'removed'));
+
+  self._localNames = new Cache();
+  self._localNames.on('timeout', function(name, suffix) {
+    self._sendRefresh(name, suffix);
+  });
+  self._localNames.on('added', self.emit.bind(self, 'added'));
+  self._localNames.on('removed', self.emit.bind(self, 'removed'));
+
   self._responseHandlers = Object.create(null);
 
   self._type = 'broadcast';
@@ -150,6 +162,10 @@ NetbiosNameService.prototype.stop = function(callback) {
   var self = this;
   self._stopTcp(function() {
     self._stopUdp(function() {
+      self._cache.removeAllListeners();
+      self._cache.clear();
+      self._localNames.removeAllListeners();
+      self._localNames.clear();
       if (typeof callback === 'function') {
         callback();
       }
@@ -181,9 +197,6 @@ NetbiosNameService.prototype._stopUdp = function(callback) {
   }
   callback();
 };
-
-// TODO: Implement periodic refresh message for local names when their TTL
-//       is exhausted.
 
 NetbiosNameService.prototype.add = function(name, suffix, group, address, ttl,
                                             callback) {
@@ -276,10 +289,10 @@ NetbiosNameService.prototype._sendRequest = function(address, port, request) {
   var handler = this._responseHandlers[request.transactionId];
   if (handler) {
     handler.timerId = null;
+    handler.count += 1;
 
     // Schedule another packet if we have not hit the retry limit
     if (handler.count < BCAST_RETRY_COUNT) {
-      handler.count += 1;
       var sendFunc = this._sendRequest.bind(this, address, port, request);
       handler.timerId = timers.setTimeout(sendFunc, BCAST_RETRY_DELAY_MS);
 
@@ -314,13 +327,15 @@ NetbiosNameService.prototype.remove = function(name, suffix, callback) {
       noResponseFunc: callback
     };
 
+    this._localNames.remove(name, suffix);
     this._sendRequest('255.255.255.255', UDP_PORT, request);
   }
 };
 
 NetbiosNameService.prototype.find = function(name, suffix, callback) {
   var self = this;
-  var record = self._cache.getNb(name, suffix);
+  var record = self._localName.getNb(name, suffix) ||
+               self._cache.getNb(name, suffix);
   if (record) {
     if (typeof callback === 'function') {
       callback(record.nb.entries[0].address);
