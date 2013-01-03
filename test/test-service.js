@@ -27,7 +27,7 @@ module.exports.testRegistrationConflict = function(test) {
   // we are going to mock send and receive, so disable network features
   var service = new Service({ tcpDisable: true, udpDisable: true });
 
-  addToCache(service._localNames, name, suffix, false);
+  addToMap(service._localNames, name, suffix, false);
 
   var request = {
     transactionId: 12345,
@@ -98,7 +98,7 @@ module.exports.testQueryNb = function(test) {
   var suffix = 0x20;
   var group = false;
 
-  addToCache(service._localNames, name, suffix, group);
+  addToMap(service._localNames, name, suffix, group);
 
   var request = {
     transactionId: 67890,
@@ -168,7 +168,7 @@ module.exports.testQueryNbstat = function(test) {
   var group = false;
 
   names.forEach(function(name) {
-    addToCache(service._localNames, name, suffix, group);
+    addToMap(service._localNames, name, suffix, group);
   });
 
   var request = {
@@ -206,7 +206,7 @@ module.exports.testQueryNbstat = function(test) {
   });
 };
 
-function addToCache(cache, name, suffix, group) {
+function addToMap(map, name, suffix, group) {
   var record = {
     name: name,
     suffix: suffix,
@@ -217,5 +217,5 @@ function addToCache(cache, name, suffix, group) {
     }
   };
 
-  cache.update(record);
+  map.update(record);
 }

@@ -31,7 +31,7 @@ var net = require('net');
 var timers = require('timers');
 var util = require('util');
 
-var Cache = require('./cache');
+var Map = require('./map');
 var Stream = require('./stream');
 var pack = require('./pack');
 var unpack = require('./unpack');
@@ -68,14 +68,14 @@ function NetbiosNameService(options) {
     self._udpSocket = options.udpSocket;
   }
 
-  self._cache = new Cache();
+  self._cache = new Map();
   self._cache.on('timeout', function(name, suffix) {
     self._cache.remove(name, suffix);
   });
   self._cache.on('added', self.emit.bind(self, 'added'));
   self._cache.on('removed', self.emit.bind(self, 'removed'));
 
-  self._localNames = new Cache();
+  self._localNames = new Map();
   self._localNames.on('timeout', function(name, suffix) {
     self._sendRefresh(name, suffix);
   });

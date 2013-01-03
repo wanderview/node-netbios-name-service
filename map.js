@@ -23,7 +23,7 @@
 
 'use strict';
 
-module.exports = NetbiosNameServiceCache;
+module.exports = NetbiosNameMap;
 
 var decompose = require('netbios-name/decompose');
 
@@ -31,17 +31,17 @@ var EventEmitter = require('events').EventEmitter;
 var timers = require('timers');
 var util = require('util');
 
-util.inherits(NetbiosNameServiceCache, EventEmitter);
+util.inherits(NetbiosNameMap, EventEmitter);
 
 var TIMER_DELAY_S = 1;
 var TIMER_DELAY_MS = TIMER_DELAY_S * 1000;
 
 // TODO: for groups this class needs to support multiple addresses per name
 
-function NetbiosNameServiceCache(options) {
-  var self = (this instanceof NetbiosNameServiceCache)
+function NetbiosNameMap(options) {
+  var self = (this instanceof NetbiosNameMap)
            ? this
-           : Object.create(NetbiosNameServiceCache.prototype);
+           : Object.create(NetbiosNameMap.prototype);
 
   EventEmitter.call(self);
 
@@ -57,7 +57,7 @@ function NetbiosNameServiceCache(options) {
   return self;
 }
 
-NetbiosNameServiceCache.prototype.getNb = function(name, suffix) {
+NetbiosNameMap.prototype.getNb = function(name, suffix) {
   var mapName = name + '-' + suffix;
   var entry = this._map[mapName];
   if (entry) {
@@ -78,7 +78,7 @@ NetbiosNameServiceCache.prototype.getNb = function(name, suffix) {
   return null;
 };
 
-NetbiosNameServiceCache.prototype.getNbstat = function(name, suffix) {
+NetbiosNameMap.prototype.getNbstat = function(name, suffix) {
   var nodes = [];
   for (var mapName in this._map) {
     var entry = this._map[mapName];
@@ -113,12 +113,12 @@ NetbiosNameServiceCache.prototype.getNbstat = function(name, suffix) {
   return record;
 };
 
-NetbiosNameServiceCache.prototype.contains = function(name, suffix) {
+NetbiosNameMap.prototype.contains = function(name, suffix) {
   var mapName = name + '-' + suffix;
   return (this._map[mapName] !== undefined);
 };
 
-NetbiosNameServiceCache.prototype.add = function(name, suffix, group, address,
+NetbiosNameMap.prototype.add = function(name, suffix, group, address,
                                                  ttl, type) {
   var mapName = name + '-' + suffix;
 
@@ -144,13 +144,13 @@ NetbiosNameServiceCache.prototype.add = function(name, suffix, group, address,
   this._setTimer();
 };
 
-NetbiosNameServiceCache.prototype.update = function(record) {
+NetbiosNameMap.prototype.update = function(record) {
   this.add(record.name, record.suffix, record.nb.entries[0].group,
            record.nb.entries[0].address, record.ttl,
            record.nb.entries[0].type);
 };
 
-NetbiosNameServiceCache.prototype.remove = function(name, suffix) {
+NetbiosNameMap.prototype.remove = function(name, suffix) {
   var mapName = name + '-' + suffix;
   var entry = this._map[mapName];
   if (entry) {
@@ -165,7 +165,7 @@ NetbiosNameServiceCache.prototype.remove = function(name, suffix) {
   }
 };
 
-NetbiosNameServiceCache.prototype.clear = function() {
+NetbiosNameMap.prototype.clear = function() {
   var self = this;
   var oldMap = self._map;
   self._map = Object.create(null);
@@ -177,7 +177,7 @@ NetbiosNameServiceCache.prototype.clear = function() {
   self._clearTimer();
 };
 
-NetbiosNameServiceCache.prototype._onTimer = function() {
+NetbiosNameMap.prototype._onTimer = function() {
   this.timerId = null;
 
   for (var mapName in this._map) {
@@ -192,13 +192,13 @@ NetbiosNameServiceCache.prototype._onTimer = function() {
   this._setTimer();
 };
 
-NetbiosNameServiceCache.prototype._setTimer = function() {
+NetbiosNameMap.prototype._setTimer = function() {
   if (this._count > 0 && !this._timerId && this._enableTimeouts) {
     this.timerId = timers.setTimeout(this._onTimer.bind(this), TIMER_DELAY_MS);
   }
 };
 
-NetbiosNameServiceCache.prototype._clearTimer = function() {
+NetbiosNameMap.prototype._clearTimer = function() {
   if (this._timerId) {
     timers.clearTimeout(this._timerId);
     this._timerId = null;
