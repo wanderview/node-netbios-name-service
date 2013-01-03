@@ -34,7 +34,9 @@ serv.start(function() {
     serv.add('FOOBAR.example.com', 0x00, false, localAddress, 10, function(success) {
       console.log('registration result [' + success + ']');
       serv.remove('FOOBAR.example.com', 0x00, function() {
-        serv.stop();
+        setTimeout(function() {
+          serv.stop();
+        }, 1000);
       });
     });
   });
