@@ -29,15 +29,25 @@ var localAddress = '10.0.1.6';
 var serv = new Service();
 
 serv.start(function() {
-  serv.find('VMWINXP.example.com', 0x00, function(address) {
-    console.log('found VMWINXP at [' + address + ']');
-    serv.add('FOOBAR.example.com', 0x00, false, localAddress, 10, function(success) {
-      console.log('registration result [' + success + ']');
-      serv.remove('FOOBAR.example.com', 0x00, function() {
-        setTimeout(function() {
-          serv.stop();
-        }, 1000);
-      });
-    });
+  serv.on('added', function(name, suffix, address) {
+    console.log('ADDED: [' + name + '] [' + suffix + '] [' + address + ']');
+  });
+  serv.on('removed', function(name, suffix) {
+    console.log('REMOVED: [' + name + '] [' + suffix + ']');
+  });
+  serv.on('error', function(error) {
+    console.log('ERROR: [' + error + ']');
+  });
+
+  var name = 'VMWINXP.example.com';
+  /*
+  serv.find(name, 0x00, function(address) {
+    console.log('FIND: [' + name + '] resulted in [' + address + ']');
+  });
+  */
+
+  var name2 = 'FOOBAR.example.com';
+  serv.add(name, 0x00, false, localAddress, 10, function(success) {
+    console.log('ADD: [' + name + '] resulted in [' + success + ']');
   });
 });
