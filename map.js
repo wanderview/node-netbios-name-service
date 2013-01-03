@@ -138,7 +138,7 @@ NetbiosNameMap.prototype.add = function(name, suffix, group, address,
   if (!this._map[mapName]) {
     this._map[mapName] = entry;
     this._count += 1;
-    this.emit('added', name, suffix);
+    this.emit('added', name, suffix, address);
   }
 
   this._setTimer();
