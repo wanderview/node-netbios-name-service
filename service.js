@@ -107,57 +107,6 @@ NetbiosNameService.prototype.start = function(callback) {
   });
 };
 
-NetbiosNameService.prototype._startTcp = function(callback) {
-  if (!this._tcpDisable) {
-    var needListen = false;
-    if (!this._tcpServer) {
-      this._tcpServer = net.createServer();
-      needListen = true;
-    }
-
-    this._tcpServer.on('error', this.emit.bind(this, 'error'));
-    this._tcpServer.on('connection', this._onTcpConnect.bind(this));
-
-    if (needListen) {
-      this._tcpServer.listen(this._tcpPort, this._tcpAddress, callback);
-      return;
-    }
-  }
-
-  callback();
-};
-
-NetbiosNameService.prototype._startUdp = function(callback) {
-  var self = this;
-  if (!self._udpDisable) {
-    var needBind = false;
-    if (!self._udpSocket) {
-      self._udpSocket = dgram.createSocket('udp4');
-      needBind = true;
-    } else {
-      self._udpSocket.setBroadcast(true);
-    }
-
-    self._udpSocket.on('error', self.emit.bind(self, 'error'));
-    self._udpSocket.on('message', self._onUdpMsg.bind(self));
-
-    if (needBind) {
-      self._udpSocket.on('listening', function() {
-        self._udpSocket.setBroadcast(true);
-        if (typeof callback === 'function') {
-          callback();
-        }
-      });
-      self._udpSocket.bind(self._udpPort, self._udpAddress);
-      return;
-    }
-  }
-
-  if (typeof callback === 'function') {
-    callback();
-  }
-};
-
 NetbiosNameService.prototype.stop = function(callback) {
   var self = this;
   self._stopTcp(function() {
@@ -171,31 +120,6 @@ NetbiosNameService.prototype.stop = function(callback) {
       }
     });
   });
-};
-
-NetbiosNameService.prototype._stopTcp = function(callback) {
-  var self = this;
-  if (self._tcpServer) {
-    self._tcpServer.close(function() {
-      self._tcpServer = null;
-      callback();
-    });
-    return;
-  }
-  callback();
-};
-
-NetbiosNameService.prototype._stopUdp = function(callback) {
-  var self = this;
-  if (self._udpSocket) {
-    self._udpSocket.on('close', function() {
-      self._udpSocket = null;
-      callback();
-    });
-    self._udpSocket.close();
-    return;
-  }
-  callback();
 };
 
 NetbiosNameService.prototype.add = function(name, suffix, group, address, ttl,
@@ -220,6 +144,9 @@ NetbiosNameService.prototype.add = function(name, suffix, group, address, ttl,
     self._responseHandlers[transactionId] = {
       count: 0,
       timerId: null,
+
+      // In broadcast mode if we get a response then that means someone is
+      // disputing our claim to this name.
       responseFunc: function(response) {
         delete self._responseHandlers[transactionId];
         if (typeof callback === 'function') {
@@ -234,6 +161,10 @@ NetbiosNameService.prototype.add = function(name, suffix, group, address, ttl,
           }
         }
       },
+
+      // If we send the required number of registration requests and do
+      // not get a conflict response from any other nodes then we can
+      // safely declare this name ours.
       noResponseFunc: function() {
         delete self._responseHandlers[transactionId];
         self._localNames.add(name, suffix, group, address, ttl, self._type);
@@ -244,64 +175,8 @@ NetbiosNameService.prototype.add = function(name, suffix, group, address, ttl,
       }
     };
 
+    // Begin issuing the registration requests.
     self._sendRequest('255.255.255.255', UDP_PORT, request);
-  }
-};
-
-NetbiosNameService.prototype._sendRefresh = function(name, suffix) {
-  var record = this._localNames.getNb(name, suffix);
-  if (!record) {
-    return;
-  }
-
-  var transactionId = this._newTransactionId();
-  var request = {
-    transactionId: transactionId,
-    op: 'refresh',
-    authoritative: true,
-    broadcast: true,
-    recursionDesired: true,
-    questions: [ {name: name, suffix: suffix, type: 'nb',
-                  group: record.nb.entries[0].group} ],
-    additionalRecords: [ record ]
-  };
-
-  // This is a one-shot send, so no need for response handlers
-  delete this._responseHandlers[transactionId];
-
-  this._sendRequest('255.255.255.255', UDP_PORT, request);
-};
-
-NetbiosNameService.prototype._newTransactionId = function() {
-  var rtn = this._nextTransactionId;
-
-  // increment transaction ID and wrap if necessary
-  this._nextTransactionId += 1;
-  this._nextTransactionId &= 0xffff;
-
-  return rtn;
-};
-
-NetbiosNameService.prototype._sendRequest = function(address, port, request) {
-  // TODO: support TCP server instead of UDP broadcast
-  this._sendUdpMsg(address, port, request);
-
-  var handler = this._responseHandlers[request.transactionId];
-  if (handler) {
-    handler.timerId = null;
-    handler.count += 1;
-
-    // Schedule another packet if we have not hit the retry limit
-    if (handler.count < BCAST_RETRY_COUNT) {
-      var sendFunc = this._sendRequest.bind(this, address, port, request);
-      handler.timerId = timers.setTimeout(sendFunc, BCAST_RETRY_DELAY_MS);
-
-    // Otherwise send no more requests and handle the "no response" condition
-    } else if (typeof handler.noResponseFunc === 'function') {
-      handler.noResponseFunc();
-    } else {
-      delete this._responseHandlers[request.transactionId];
-    }
   }
 };
 
@@ -334,7 +209,7 @@ NetbiosNameService.prototype.remove = function(name, suffix, callback) {
 
 NetbiosNameService.prototype.find = function(name, suffix, callback) {
   var self = this;
-  var record = self._localName.getNb(name, suffix) ||
+  var record = self._localNames.getNb(name, suffix) ||
                self._cache.getNb(name, suffix);
   if (record) {
     if (typeof callback === 'function') {
@@ -390,6 +265,99 @@ NetbiosNameService.prototype.find = function(name, suffix, callback) {
   this._sendRequest('255.255.255.255', UDP_PORT, request);
 };
 
+// ----------------------------------------------------------------------------
+// Private methods
+// ----------------------------------------------------------------------------
+
+NetbiosNameService.prototype._startTcp = function(callback) {
+  if (!this._tcpDisable) {
+    var needListen = false;
+    if (!this._tcpServer) {
+      this._tcpServer = net.createServer();
+      needListen = true;
+    }
+
+    this._tcpServer.on('error', this.emit.bind(this, 'error'));
+    this._tcpServer.on('connection', this._onTcpConnect.bind(this));
+
+    if (needListen) {
+      this._tcpServer.listen(this._tcpPort, this._tcpAddress, callback);
+      return;
+    }
+  }
+
+  callback();
+};
+
+NetbiosNameService.prototype._stopTcp = function(callback) {
+  var self = this;
+  if (self._tcpServer) {
+    self._tcpServer.close(function() {
+      self._tcpServer = null;
+      callback();
+    });
+    return;
+  }
+  callback();
+};
+
+NetbiosNameService.prototype._onTcpConnect = function(socket) {
+  var self = this;
+  var stream = new Stream(socket);
+
+  // TODO: How do we handle socket teardown here?  Do we have to cleanup
+  //       anything to avoid memory leaks due to stale objects?
+
+  stream.on('error', self.emit.bind(self, 'error'));
+  stream.on('message', function(msg) {
+    self._onNetbiosMsg(msg, stream.write.bind(stream));
+  });
+};
+
+NetbiosNameService.prototype._startUdp = function(callback) {
+  var self = this;
+  if (!self._udpDisable) {
+    var needBind = false;
+    if (!self._udpSocket) {
+      self._udpSocket = dgram.createSocket('udp4');
+      needBind = true;
+    } else {
+      self._udpSocket.setBroadcast(true);
+    }
+
+    self._udpSocket.on('error', self.emit.bind(self, 'error'));
+    self._udpSocket.on('message', self._onUdpMsg.bind(self));
+
+    if (needBind) {
+      self._udpSocket.on('listening', function() {
+        self._udpSocket.setBroadcast(true);
+        if (typeof callback === 'function') {
+          callback();
+        }
+      });
+      self._udpSocket.bind(self._udpPort, self._udpAddress);
+      return;
+    }
+  }
+
+  if (typeof callback === 'function') {
+    callback();
+  }
+};
+
+NetbiosNameService.prototype._stopUdp = function(callback) {
+  var self = this;
+  if (self._udpSocket) {
+    self._udpSocket.on('close', function() {
+      self._udpSocket = null;
+      callback();
+    });
+    self._udpSocket.close();
+    return;
+  }
+  callback();
+};
+
 NetbiosNameService.prototype._onUdpMsg = function(msg, rinfo) {
   var self = this;
   unpack(msg, function(error, len, nbmsg) {
@@ -421,17 +389,61 @@ NetbiosNameService.prototype._sendUdpMsg = function(address, port, msg) {
   });
 };
 
-NetbiosNameService.prototype._onTcpConnect = function(socket) {
-  var self = this;
-  var stream = new Stream(socket);
+NetbiosNameService.prototype._newTransactionId = function() {
+  var rtn = this._nextTransactionId;
 
-  // TODO: How do we handle socket teardown here?  Do we have to cleanup
-  //       anything to avoid memory leaks due to stale objects?
+  // increment transaction ID and wrap if necessary
+  this._nextTransactionId += 1;
+  this._nextTransactionId &= 0xffff;
 
-  stream.on('error', self.emit.bind(self, 'error'));
-  stream.on('message', function(msg) {
-    self._onNetbiosMsg(msg, stream.write.bind(stream));
-  });
+  return rtn;
+};
+
+NetbiosNameService.prototype._sendRequest = function(address, port, request) {
+  // TODO: support TCP server instead of UDP broadcast
+  this._sendUdpMsg(address, port, request);
+
+  var handler = this._responseHandlers[request.transactionId];
+  if (handler) {
+    handler.timerId = null;
+    handler.count += 1;
+
+    // Schedule another packet if we have not hit the retry limit
+    if (handler.count < BCAST_RETRY_COUNT) {
+      var sendFunc = this._sendRequest.bind(this, address, port, request);
+      handler.timerId = timers.setTimeout(sendFunc, BCAST_RETRY_DELAY_MS);
+
+    // Otherwise send no more requests and handle the "no response" condition
+    } else if (typeof handler.noResponseFunc === 'function') {
+      handler.noResponseFunc();
+    } else {
+      delete this._responseHandlers[request.transactionId];
+    }
+  }
+};
+
+NetbiosNameService.prototype._sendRefresh = function(name, suffix) {
+  var record = this._localNames.getNb(name, suffix);
+  if (!record) {
+    return;
+  }
+
+  var transactionId = this._newTransactionId();
+  var request = {
+    transactionId: transactionId,
+    op: 'refresh',
+    authoritative: true,
+    broadcast: true,
+    recursionDesired: true,
+    questions: [ {name: name, suffix: suffix, type: 'nb',
+                  group: record.nb.entries[0].group} ],
+    additionalRecords: [ record ]
+  };
+
+  // This is a one-shot send, so no need for response handlers
+  delete this._responseHandlers[transactionId];
+
+  this._sendRequest('255.255.255.255', UDP_PORT, request);
 };
 
 NetbiosNameService.prototype._onNetbiosMsg = function(msg, sendFunc) {
