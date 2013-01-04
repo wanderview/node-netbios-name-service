@@ -31,6 +31,7 @@ var net = require('net');
 var timers = require('timers');
 var util = require('util');
 
+var Broadcast = require('./broadcast');
 var Map = require('./map');
 var Stream = require('./stream');
 var pack = require('./pack');
@@ -77,17 +78,19 @@ function NetbiosNameService(options) {
 
   self._localNames = new Map();
   self._localNames.on('timeout', function(name, suffix) {
-    self._sendRefresh(name, suffix);
+    // TODO:  This is only done in point, mixed, and hybrid modes
+    //self._sendRefresh(name, suffix);
   });
   self._localNames.on('added', self.emit.bind(self, 'added'));
   self._localNames.on('removed', self.emit.bind(self, 'removed'));
 
-  self._responseHandlers = Object.create(null);
-
-  self._type = 'broadcast';
-
   var now = new Date();
   self._nextTransactionId = now.getTime() & 0xffff;
+
+  self._type = 'broadcast';
+  self._mode = new Broadcast({
+    broadcastFunc: self._sendUdpMsg.bind(self, '255.255.255.255', UDP_PORT)
+  });
 
   return self;
 }
@@ -126,85 +129,43 @@ NetbiosNameService.prototype.add = function(name, suffix, group, address, ttl,
                                             callback) {
   var self = this;
   if (!self._localNames.contains(name, suffix)) {
-    var transactionId = self._newTransactionId();
-
-    var request = {
-      transactionId: transactionId,
-      op: 'registration',
-      broadcast: true,
-      authoritative: true,
-      recursionDesired: true,
-      questions: [{name: name, suffix: suffix, type: 'nb', group: group}],
-      additionalRecords: [{
-        name: name, suffix: suffix, type: 'nb', ttl: ttl,
-        nb: { entries: [{address: address, type: self._type, group: group}] }
-      }]
+    var modeOpts = {
+      transactionId: self._newTransactionId(),
+      name: name,
+      suffix: suffix,
+      group: group,
+      address: address,
+      ttl: ttl,
+      type: self._type
     };
 
-    self._responseHandlers[transactionId] = {
-      count: 0,
-      timerId: null,
-
-      // In broadcast mode if we get a response then that means someone is
-      // disputing our claim to this name.
-      responseFunc: function(response) {
-        delete self._responseHandlers[transactionId];
-        if (typeof callback === 'function') {
-          // negative response
-          if (response.error) {
-            var owner = response.answerRecords[0].nb.entries[0].address;
-            callback(false, owner);
-
-          // positive response
-          } else {
-            // ignore as this should not happen for 'broadcast' nodes
-          }
-        }
-      },
-
-      // If we send the required number of registration requests and do
-      // not get a conflict response from any other nodes then we can
-      // safely declare this name ours.
-      noResponseFunc: function() {
-        delete self._responseHandlers[transactionId];
+    self._mode.add(modeOpts, function(success, conflictAddress) {
+      if (success) {
         self._localNames.add(name, suffix, group, address, ttl, self._type);
-        self._sendRefresh(name, suffix);
-        if (typeof callback === 'function') {
-          callback(true);
-        }
       }
-    };
-
-    // Begin issuing the registration requests.
-    self._sendRequest('255.255.255.255', UDP_PORT, request);
+      if (typeof callback === 'function') {
+        callback(success, conflictAddress);
+      }
+    });
   }
 };
 
 NetbiosNameService.prototype.remove = function(name, suffix, callback) {
   var record = this._localNames.getNb(name, suffix);
-  if (record) {
-    var transactionId = this._newTransactionId();
-    var request = {
-      transactionId: transactionId,
-      op: 'release',
-      authoritative: true,
-      broadcast: true,
-      recursionDesired: true,
-      questions: [{ name: name, suffix: suffix, type: 'nb',
-                    group: record.nb.entries[0].group }],
-      additionalRecords: [ record ]
-    };
-
-    this._responseHandlers[transactionId] = {
-      count: 0,
-      timerId: null,
-      responseFunc: null,
-      noResponseFunc: callback
-    };
-
-    this._localNames.remove(name, suffix);
-    this._sendRequest('255.255.255.255', UDP_PORT, request);
+  if (!record) {
+    if (typeof callback === 'function') {
+      calback();
+    }
+    return;
   }
+
+  this._localNames.remove(name, suffix);
+  this._mode.remove({
+    transactionId: this._newTransactionId(),
+    name: name,
+    suffix: suffix,
+    record: record
+  }, callback);
 };
 
 NetbiosNameService.prototype.find = function(name, suffix, callback) {
@@ -218,51 +179,21 @@ NetbiosNameService.prototype.find = function(name, suffix, callback) {
     return;
   }
 
-  var transactionId = self._newTransactionId();
-  var request = {
-    transactionId: transactionId,
-    op: 'query',
-    broadcast: true,
-    recursionDesired: true,
-    questions: [ { name: name, suffix: suffix, type: 'nb', group: false } ]
+  var modeOpts = {
+    transactionId: this._newTransactionId(),
+    name: name,
+    suffix: suffix,
   };
 
-  self._responseHandlers[transactionId] = {
-    count: 0,
-    timerId: null,
-    noResponseFunc: function() {
+  self._mode.find(modeOpts, function(conflict, address) {
+    if (conflict) {
+      self._cache.remove(name, suffix);
+    } else {
       if (typeof callback === 'function') {
-        callback(null);
+        callback(address);
       }
-    },
-    responseFunc: function(response) {
-      var answer = response.answerRecords[0];
-      self._cache.update(answer);
-      var address = answer.nb.entries[0].address;
-      if (typeof callback === 'function') {
-        callback(answer.nb.entries[0].address);
-      }
-
-      // If we get another response packet then there is a conflict and we
-      // need to avoid treating this value as authoritative in our cache
-      self._responseHandlers[transactionId].responseFunc = function(response2) {
-        var address2 = answer.nb.entries[0].address;
-        if (address !== address2) {
-          // The RFC says to mark the name as in "conflict", but logically its
-          // the same as being removed.  Just remove it for now.
-          self._cache.remove(name, suffix);
-        }
-      };
-
-      // We only need to check for the conflicting responses for a limited
-      // time.  After that occurs, clear the response handler.
-      timers.setTimeout(function() {
-        delete self._responseHandlers[transactionId];
-      }, CONFLICT_DELAY_MS);
     }
-  };
-
-  this._sendRequest('255.255.255.255', UDP_PORT, request);
+  });
 };
 
 // ----------------------------------------------------------------------------
@@ -399,156 +330,36 @@ NetbiosNameService.prototype._newTransactionId = function() {
   return rtn;
 };
 
-NetbiosNameService.prototype._sendRequest = function(address, port, request) {
-  // TODO: support TCP server instead of UDP broadcast
-  this._sendUdpMsg(address, port, request);
-
-  var handler = this._responseHandlers[request.transactionId];
-  if (handler) {
-    handler.timerId = null;
-    handler.count += 1;
-
-    // Schedule another packet if we have not hit the retry limit
-    if (handler.count < BCAST_RETRY_COUNT) {
-      var sendFunc = this._sendRequest.bind(this, address, port, request);
-      handler.timerId = timers.setTimeout(sendFunc, BCAST_RETRY_DELAY_MS);
-
-    // Otherwise send no more requests and handle the "no response" condition
-    } else if (typeof handler.noResponseFunc === 'function') {
-      handler.noResponseFunc();
-    } else {
-      delete this._responseHandlers[request.transactionId];
-    }
-  }
-};
-
-NetbiosNameService.prototype._sendRefresh = function(name, suffix) {
-  var record = this._localNames.getNb(name, suffix);
-  if (!record) {
-    return;
-  }
-
-  var transactionId = this._newTransactionId();
-  var request = {
-    transactionId: transactionId,
-    op: 'refresh',
-    authoritative: true,
-    broadcast: true,
-    recursionDesired: true,
-    questions: [ {name: name, suffix: suffix, type: 'nb',
-                  group: record.nb.entries[0].group} ],
-    additionalRecords: [ record ]
-  };
-
-  // This is a one-shot send, so no need for response handlers
-  delete this._responseHandlers[transactionId];
-
-  this._sendRequest('255.255.255.255', UDP_PORT, request);
-};
-
 NetbiosNameService.prototype._onNetbiosMsg = function(msg, sendFunc) {
   if (msg.response) {
-    this._onResponse(msg, sendFunc);
+    this._mode.onResponse(msg, sendFunc);
   } else {
-    this._onRequest(msg, sendFunc);
-  }
-};
-
-NetbiosNameService.prototype._onResponse = function(msg, sendFunc) {
-  // If we are expecting this response, then process it appropriately.  Ignore
-  // spurious responses we are not expecting.
-  var handler = this._responseHandlers[msg.transactionId];
-  if (handler && typeof handler.responseFunc === 'function') {
-    timers.clearTimeout(handler.timerId);
-    handler.timerId = null;
-    handler.responseFunc(msg, sendFunc);
-  }
-};
-
-NetbiosNameService.prototype._onRequest = function(msg, sendFunc) {
-  switch (msg.op) {
-    case 'query':
-      this._onQuery(msg, sendFunc);
-      break;
-    case 'registration':
-      this._onRegistration(msg, sendFunc);
-      break;
-    case 'release':
-      this._onRelease(msg, sendFunc);
-      break;
-    case 'wack':
-      // do nothing
-      break;
-    case 'refresh':
-      this._onRefresh(msg, sendFunc);
-      break;
-    default:
-      // do nothing
-      break;
-  }
-};
-
-NetbiosNameService.prototype._onQuery = function(msg, sendFunc) {
-  var q = msg.questions ? msg.questions[0] : null;
-  if (!q) {
-    return;
-  }
-
-  var answer = null;
-  if (q.type === 'nb') {
-    answer = this._localNames.getNb(q.name, q.suffix);
-  } else if (q.type === 'nbstat') {
-    answer = this._localNames.getNbstat(q.name, q.suffix);
-  }
-
-  if (answer) {
-    var response = {
-      transactionId: msg.transactionId,
-      response: true,
-      op: msg.op,
-      authoritative: true,
-      answerRecords: [answer]
+    var modeOpts = {
+      request: msg,
+      sendFunc: sendFunc,
+      localMap: this._localNames,
+      remoteMap: this._cache
     };
-    sendFunc(response);
-  }
-};
 
-NetbiosNameService.prototype._onRegistration = function(msg, sendFunc) {
-  var rec = msg.additionalRecords ? msg.additionalRecords[0] : null;
-  if (!rec) {
-    return;
-  }
-
-  // Check to see if we have this name claimed.  If both the local and remote
-  // names are registered as a group, then there is no conflict.
-  var localRec = this._localNames.getNb(rec.name, rec.suffix);
-  if (localRec &&
-      (!localRec.nb.entries[0].group || !rec.nb.entries[0].group)) {
-
-    // Send a conflict response
-    var response = {
-      transactionId: msg.transactionId,
-      response: true,
-      op: msg.op,
-      authoritative: true,
-      error: 'active',
-      answerRecords: [localRec]
-    };
-    sendFunc(response);
-  }
-};
-
-NetbiosNameService.prototype._onRelease = function(msg, sendFunc) {
-  var rec = msg.additionalRecords[0];
-  this._cache.remove(rec.name, rec.suffix);
-};
-
-NetbiosNameService.prototype._onRefresh = function(msg, sendFunc) {
-  var rec = msg.additionalRecords[0];
-
-  // To be safe, ignore refresh requests for names we think we own.  This
-  // shouldn't happen in theory.
-  if (!this._localNames.contains(rec.name, rec.suffix)) {
-    this._cache.update(rec);
+    switch (msg.op) {
+      case 'query':
+        this._mode.onQuery(modeOpts);
+        break;
+      case 'registration':
+        this._mode.onRegistration(modeOpts);
+        break;
+      case 'release':
+        this._mode.onRelease(modeOpts);
+        break;
+      case 'wack':
+        this._mode.onWack(modeOpts);
+        break;
+      case 'refresh':
+        this._mode.onRefresh(modeOpts);
+        break;
+      default:
+        // do nothing
+        break;
+    }
   }
 };
