@@ -39,12 +39,17 @@ function NetbiosBroadcastMode(opts) {
                     'creation function');
   } else if (typeof opts.broadcastFunc !== 'function') {
     throw new Error('NetbiosBroadcastMode() requires a broadcast function');
+  } else if (!opts.localMap) {
+    throw new Error('NetbiosBroadcastMode() requires a local name map');
+  } else if (!opts.remoteMap) {
+    throw new Error('NetbiosBroadcastMode() requires a remote name map');
   }
-
-  // TODO: should the local and remote name maps be owned here?
 
   self._transactionIdFunc = opts.transactionIdFunc;
   self._broadcastFunc = opts.broadcastFunc;
+  self._localMap = opts.localMap;
+  self._remoteMap = opts.remoteMap;
+
   self._requestState = Object.create(null);
 
   return self;
@@ -71,6 +76,10 @@ NetbiosBroadcastMode.prototype.add = function(opts, callback) {
   var address = opts.address;
   var ttl = opts.ttl;
   var type = opts.type;
+
+  if (self._localMap.contains(name, suffix)) {
+    return;
+  }
 
   var transactionId = self._transactionIdFunc();
   var request = {
@@ -109,7 +118,8 @@ NetbiosBroadcastMode.prototype.add = function(opts, callback) {
     // safely declare this name ours.
     noResponseFunc: function() {
       delete self._requestState[transactionId];
-      // TODO: handle send refresh
+      self._localMap.add(name, suffix, group, address, ttl, self._type);
+      self._sendRefresh(name, suffix);
       if (typeof callback === 'function') {
         callback(true);
       }
@@ -123,7 +133,14 @@ NetbiosBroadcastMode.prototype.add = function(opts, callback) {
 NetbiosBroadcastMode.prototype.remove = function(opts, callback) {
   var name = opts.name;
   var suffix = opts.suffix;
-  var record = opts.record;
+
+  var record = this._localMap.getNb(name, suffix);
+  if (!record) {
+    if (typeof callback === 'function') {
+      calback();
+    }
+    return;
+  }
 
   var transactionId = this._transactionIdFunc();
   var request = {
@@ -141,6 +158,7 @@ NetbiosBroadcastMode.prototype.remove = function(opts, callback) {
     noResponseFunc: callback
   });
 
+  this._localMap.remove(name, suffix);
   this._sendRequest(request);
 };
 
@@ -148,6 +166,15 @@ NetbiosBroadcastMode.prototype.find = function(opts, callback) {
   var self = this;
   var name = opts.name;
   var suffix = opts.suffix;
+
+  var record = self._localMap.getNb(name, suffix) ||
+               self._remoteMap.getNb(name, suffix);
+  if (record) {
+    if (typeof callback === 'function') {
+      callback(record.nb.entries[0].address);
+    }
+    return;
+  }
 
   var transactionId = opts._transactionIdFunc();
   var request = {
@@ -169,8 +196,9 @@ NetbiosBroadcastMode.prototype.find = function(opts, callback) {
       // TODO: WINXP seems to perform an NBSTAT here before declaring success.
       var answer = response.answerRecords[0];
       var address = answer.nb.entries[0].address;
+      self._remoteMap.update(answer);
       if (typeof callback === 'function') {
-        callback(false, answer.nb.entries[0].address);
+        callback(answer.nb.entries[0].address);
       }
 
       // If we get another response packet then there is a conflict and we
@@ -180,7 +208,7 @@ NetbiosBroadcastMode.prototype.find = function(opts, callback) {
         var address2 = answer2.nb.entries[0].address;
         if (address !== address2) {
           // TODO: send name conflict demand packet
-          callback(true);
+          self._remoteMap.remove(name, suffix);
         }
       };
 
@@ -209,7 +237,6 @@ NetbiosBroadcastMode.prototype.onResponse = function(msg, sendFunc) {
 
 NetbiosBroadcastMode.prototype.onQuery = function(opts) {
   var request = opts.request;
-  var localMap = opts.localMap;
   var sendFunc = opts.sendFunc;
 
   var q = request.questions ? request.questions[0] : null;
@@ -219,9 +246,9 @@ NetbiosBroadcastMode.prototype.onQuery = function(opts) {
 
   var answer = null;
   if (q.type === 'nb') {
-    answer = localMap.getNb(q.name, q.suffix);
+    answer = this._localMap.getNb(q.name, q.suffix);
   } else if (q.type === 'nbstat') {
-    answer = localMap.getNbstat(q.name, q.suffix);
+    answer = this._localMap.getNbstat(q.name, q.suffix);
   }
 
   if (answer) {
@@ -237,42 +264,31 @@ NetbiosBroadcastMode.prototype.onQuery = function(opts) {
 };
 
 NetbiosBroadcastMode.prototype.onRegistration = function(opts) {
-  var request = opts.request;
-  var localMap = opts.localMap;
-  var sendFunc = opts.sendFunc;
-
-  var rec = request.additionalRecords ? request.additionalRecords[0] : null;
-  if (!rec) {
-    return;
-  }
-
-  // TODO: Don't send a conflict response if this is our own registration
+  var rec = opts.request.additionalRecords[0];
 
   // Check to see if we have this name claimed.  If both the local and remote
   // names are registered as a group, then there is no conflict.
-  var localRec = localMap.getNb(rec.name, rec.suffix);
+  var localRec = this._localMap.getNb(rec.name, rec.suffix);
   if (localRec &&
+      localRec.nb.entries[0].address != rec.nb.entries[0].address &&
       (!localRec.nb.entries[0].group || !rec.nb.entries[0].group)) {
 
     // Send a conflict response
     var response = {
-      transactionId: request.transactionId,
+      transactionId: opts.request.transactionId,
       response: true,
-      op: request.op,
+      op: opts.request.op,
       authoritative: true,
       error: 'active',
       answerRecords: [localRec]
     };
-    sendFunc(response);
+    opts.sendFunc(response);
   }
 };
 
 NetbiosBroadcastMode.prototype.onRelease = function(opts) {
-  var request = opts.request;
-  var remoteMap = opts.remoteMap;
-
-  var rec = request.additionalRecords[0];
-  remoteMap.remove(rec.name, rec.suffix);
+  var rec = opts.request.additionalRecords[0];
+  this._remoteMap.remove(rec.name, rec.suffix);
 };
 
 NetbiosBroadcastMode.prototype.onWack = function(opts) {
@@ -280,16 +296,12 @@ NetbiosBroadcastMode.prototype.onWack = function(opts) {
 };
 
 NetbiosBroadcastMode.prototype.onRefresh = function(opts) {
-  var request = opts.request;
-  var localMap = opts.localMap;
-  var remoteMap = opts.remoteMap;
-
-  var rec = request.additionalRecords[0];
+  var rec = opts.request.additionalRecords[0];
 
   // To be safe, ignore refresh requests for names we think we own.  This
   // shouldn't happen in theory.
-  if (!localMap.contains(rec.name, rec.suffix)) {
-    remoteMap.update(rec);
+  if (!this._localMap.contains(rec.name, rec.suffix)) {
+    this._remoteMap.update(rec);
   }
 };
 
@@ -315,10 +327,8 @@ NetbiosBroadcastMode.prototype._sendRequest = function(request) {
   }
 };
 
-/*
-TODO: implement sendRefresh
-NetbiosNameService.prototype._sendRefresh = function(name, suffix) {
-  var record = this._localNames.getNb(name, suffix);
+NetbiosBroadcastMode.prototype._sendRefresh = function(name, suffix) {
+  var record = this._localMap.getNb(name, suffix);
   if (!record) {
     return;
   }
@@ -336,8 +346,7 @@ NetbiosNameService.prototype._sendRefresh = function(name, suffix) {
   };
 
   // This is a one-shot send, so no need for response handlers
-  delete this._responseHandlers[transactionId];
+  delete this._requestState[transactionId];
 
-  this._sendRequest('255.255.255.255', UDP_PORT, request);
+  this._sendRequest(request);
 };
-*/

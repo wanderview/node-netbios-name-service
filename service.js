@@ -37,9 +37,6 @@ var Stream = require('./stream');
 var pack = require('./pack');
 var unpack = require('./unpack');
 
-var BCAST_RETRY_DELAY_MS = 250;
-var BCAST_RETRY_COUNT = 3;
-var CONFLICT_DELAY_MS = 1000;
 var UDP_PORT = 137;
 
 // TODO: validate packets received before referencing fields
@@ -69,20 +66,20 @@ function NetbiosNameService(options) {
     self._udpSocket = options.udpSocket;
   }
 
-  self._cache = new Map();
-  self._cache.on('timeout', function(name, suffix) {
-    self._cache.remove(name, suffix);
+  self._remoteMap = new Map();
+  self._remoteMap.on('timeout', function(name, suffix) {
+    self._remoteMap.remove(name, suffix);
   });
-  self._cache.on('added', self.emit.bind(self, 'added'));
-  self._cache.on('removed', self.emit.bind(self, 'removed'));
+  self._remoteMap.on('added', self.emit.bind(self, 'added'));
+  self._remoteMap.on('removed', self.emit.bind(self, 'removed'));
 
-  self._localNames = new Map();
-  self._localNames.on('timeout', function(name, suffix) {
+  self._localMap = new Map();
+  self._localMap.on('timeout', function(name, suffix) {
     // TODO:  This is only done in point, mixed, and hybrid modes
     //self._sendRefresh(name, suffix);
   });
-  self._localNames.on('added', self.emit.bind(self, 'added'));
-  self._localNames.on('removed', self.emit.bind(self, 'removed'));
+  self._localMap.on('added', self.emit.bind(self, 'added'));
+  self._localMap.on('removed', self.emit.bind(self, 'removed'));
 
   var now = new Date();
   self._nextTransactionId = now.getTime() & 0xffff;
@@ -90,7 +87,9 @@ function NetbiosNameService(options) {
   self._type = 'broadcast';
   self._mode = new Broadcast({
     broadcastFunc: self._sendUdpMsg.bind(self, '255.255.255.255', UDP_PORT),
-    transactionIdFunc: self._newTransactionId.bind(self)
+    transactionIdFunc: self._newTransactionId.bind(self),
+    localMap: self._localMap,
+    remoteMap: self._remoteMap
   });
 
   return self;
@@ -115,10 +114,10 @@ NetbiosNameService.prototype.stop = function(callback) {
   var self = this;
   self._stopTcp(function() {
     self._stopUdp(function() {
-      self._cache.removeAllListeners();
-      self._cache.clear();
-      self._localNames.removeAllListeners();
-      self._localNames.clear();
+      self._remoteMap.removeAllListeners();
+      self._remoteMap.clear();
+      self._localMap.removeAllListeners();
+      self._localMap.clear();
       if (typeof callback === 'function') {
         callback();
       }
@@ -128,70 +127,22 @@ NetbiosNameService.prototype.stop = function(callback) {
 
 NetbiosNameService.prototype.add = function(name, suffix, group, address, ttl,
                                             callback) {
-  var self = this;
-  if (!self._localNames.contains(name, suffix)) {
-    var modeOpts = {
-      name: name,
-      suffix: suffix,
-      group: group,
-      address: address,
-      ttl: ttl,
-      type: self._type
-    };
-
-    self._mode.add(modeOpts, function(success, conflictAddress) {
-      if (success) {
-        self._localNames.add(name, suffix, group, address, ttl, self._type);
-      }
-      if (typeof callback === 'function') {
-        callback(success, conflictAddress);
-      }
-    });
-  }
-};
-
-NetbiosNameService.prototype.remove = function(name, suffix, callback) {
-  var record = this._localNames.getNb(name, suffix);
-  if (!record) {
-    if (typeof callback === 'function') {
-      calback();
-    }
-    return;
-  }
-
-  this._localNames.remove(name, suffix);
-  this._mode.remove({
+  this._mode.add({
     name: name,
     suffix: suffix,
-    record: record
+    group: group,
+    address: address,
+    ttl: ttl,
+    type: self._type
   }, callback);
 };
 
+NetbiosNameService.prototype.remove = function(name, suffix, callback) {
+  this._mode.remove({name: name, suffix: suffix}, callback);
+};
+
 NetbiosNameService.prototype.find = function(name, suffix, callback) {
-  var self = this;
-  var record = self._localNames.getNb(name, suffix) ||
-               self._cache.getNb(name, suffix);
-  if (record) {
-    if (typeof callback === 'function') {
-      callback(record.nb.entries[0].address);
-    }
-    return;
-  }
-
-  var modeOpts = {
-    name: name,
-    suffix: suffix,
-  };
-
-  self._mode.find(modeOpts, function(conflict, address) {
-    if (conflict) {
-      self._cache.remove(name, suffix);
-    } else {
-      if (typeof callback === 'function') {
-        callback(address);
-      }
-    }
-  });
+  this._mode.find({name: name, suffix: suffix}, callback);
 };
 
 // ----------------------------------------------------------------------------
@@ -335,8 +286,6 @@ NetbiosNameService.prototype._onNetbiosMsg = function(msg, sendFunc) {
     var modeOpts = {
       request: msg,
       sendFunc: sendFunc,
-      localMap: this._localNames,
-      remoteMap: this._cache
     };
 
     switch (msg.op) {
