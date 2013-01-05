@@ -28,7 +28,6 @@ module.exports = NetbiosNameService;
 var EventEmitter = require('events').EventEmitter;
 var dgram = require('dgram');
 var net = require('net');
-var timers = require('timers');
 var util = require('util');
 
 var Broadcast = require('./broadcast');
@@ -41,6 +40,8 @@ var TCP_PORT = 137;
 var UDP_PORT = 137;
 
 // TODO: validate packets received before referencing fields
+// TODO: write tests for broadcast mode
+// TODO: rework service tests now that the mode is external
 // TODO: cleanup message structure, perhaps create Message class
 // TODO: create Name class
 
