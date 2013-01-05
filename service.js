@@ -125,24 +125,16 @@ NetbiosNameService.prototype.stop = function(callback) {
   });
 };
 
-NetbiosNameService.prototype.add = function(name, suffix, group, address, ttl,
-                                            callback) {
-  this._mode.add({
-    name: name,
-    suffix: suffix,
-    group: group,
-    address: address,
-    ttl: ttl,
-    type: self._type
-  }, callback);
+NetbiosNameService.prototype.add = function(opts, callback) {
+  this._mode.add(opts, callback);
 };
 
-NetbiosNameService.prototype.remove = function(name, suffix, callback) {
-  this._mode.remove({name: name, suffix: suffix}, callback);
+NetbiosNameService.prototype.remove = function(opts, callback) {
+  this._mode.remove(opts, callback);
 };
 
-NetbiosNameService.prototype.find = function(name, suffix, callback) {
-  this._mode.find({name: name, suffix: suffix}, callback);
+NetbiosNameService.prototype.find = function(opts, callback) {
+  this._mode.find(opts, callback);
 };
 
 // ----------------------------------------------------------------------------

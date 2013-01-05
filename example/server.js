@@ -41,13 +41,19 @@ serv.start(function() {
 
   var name = 'VMWINXP.example.com';
   /*
-  serv.find(name, 0x00, function(address) {
+  serv.find({name: name, suffix: 0x00}, function(address) {
     console.log('FIND: [' + name + '] resulted in [' + address + ']');
   });
-  */
 
   var name2 = 'FOOBAR.example.com';
-  serv.add(name, 0x00, false, localAddress, 10, function(success) {
+  */
+  serv.add({
+    name: name,
+    suffix: 0x00,
+    group: false,
+    address: localAddress,
+    ttl: 10,
+  }, function(success) {
     console.log('ADD: [' + name + '] resulted in [' + success + ']');
   });
 });
