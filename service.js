@@ -89,7 +89,8 @@ function NetbiosNameService(options) {
 
   self._type = 'broadcast';
   self._mode = new Broadcast({
-    broadcastFunc: self._sendUdpMsg.bind(self, '255.255.255.255', UDP_PORT)
+    broadcastFunc: self._sendUdpMsg.bind(self, '255.255.255.255', UDP_PORT),
+    transactionIdFunc: self._newTransactionId.bind(self)
   });
 
   return self;
@@ -130,7 +131,6 @@ NetbiosNameService.prototype.add = function(name, suffix, group, address, ttl,
   var self = this;
   if (!self._localNames.contains(name, suffix)) {
     var modeOpts = {
-      transactionId: self._newTransactionId(),
       name: name,
       suffix: suffix,
       group: group,
@@ -161,7 +161,6 @@ NetbiosNameService.prototype.remove = function(name, suffix, callback) {
 
   this._localNames.remove(name, suffix);
   this._mode.remove({
-    transactionId: this._newTransactionId(),
     name: name,
     suffix: suffix,
     record: record
@@ -180,7 +179,6 @@ NetbiosNameService.prototype.find = function(name, suffix, callback) {
   }
 
   var modeOpts = {
-    transactionId: this._newTransactionId(),
     name: name,
     suffix: suffix,
   };

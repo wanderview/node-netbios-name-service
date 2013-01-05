@@ -34,12 +34,16 @@ function NetbiosBroadcastMode(opts) {
            ? this
            : Object.create(NetbiosBroadcastMode.prototype);
 
-  if (typeof opts.broadcastFunc !== 'function') {
+  if (typeof opts.transactionIdFunc !== 'function') {
+    throw new Error('NetbiosBroadcastMode() requires a transaction ID ' +
+                    'creation function');
+  } else if (typeof opts.broadcastFunc !== 'function') {
     throw new Error('NetbiosBroadcastMode() requires a broadcast function');
   }
 
   // TODO: should the local and remote name maps be owned here?
 
+  self._transactionIdFunc = opts.transactionIdFunc;
   self._broadcastFunc = opts.broadcastFunc;
   self._requestState = Object.create(null);
 
@@ -61,7 +65,6 @@ function State(opts) {
 
 NetbiosBroadcastMode.prototype.add = function(opts, callback) {
   var self = this;
-  var transactionId = opts.transactionId;
   var name = opts.name;
   var suffix = opts.suffix;
   var group = opts.group;
@@ -69,6 +72,7 @@ NetbiosBroadcastMode.prototype.add = function(opts, callback) {
   var ttl = opts.ttl;
   var type = opts.type;
 
+  var transactionId = self._transactionIdFunc();
   var request = {
     transactionId: transactionId,
     op: 'registration',
@@ -117,11 +121,11 @@ NetbiosBroadcastMode.prototype.add = function(opts, callback) {
 };
 
 NetbiosBroadcastMode.prototype.remove = function(opts, callback) {
-  var transactionId = opts.transactionId;
   var name = opts.name;
   var suffix = opts.suffix;
   var record = opts.record;
 
+  var transactionId = this._transactionIdFunc();
   var request = {
     transactionId: transactionId,
     op: 'release',
@@ -142,10 +146,10 @@ NetbiosBroadcastMode.prototype.remove = function(opts, callback) {
 
 NetbiosBroadcastMode.prototype.find = function(opts, callback) {
   var self = this;
-  var transactionId = opts.transactionId;
   var name = opts.name;
   var suffix = opts.suffix;
 
+  var transactionId = opts._transactionIdFunc();
   var request = {
     transactionId: transactionId,
     op: 'query',
@@ -319,7 +323,7 @@ NetbiosNameService.prototype._sendRefresh = function(name, suffix) {
     return;
   }
 
-  var transactionId = this._newTransactionId();
+  var transactionId = this._transactionIdFunc();
   var request = {
     transactionId: transactionId,
     op: 'refresh',
