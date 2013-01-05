@@ -39,6 +39,8 @@ function NetbiosBroadcastMode(opts) {
                     'creation function');
   } else if (typeof opts.broadcastFunc !== 'function') {
     throw new Error('NetbiosBroadcastMode() requires a broadcast function');
+  } else if (typeof opts.unicastFunc !== 'function') {
+    throw new Error('NetbiosBroadcastMode() requires a unicast function');
   } else if (!opts.localMap) {
     throw new Error('NetbiosBroadcastMode() requires a local name map');
   } else if (!opts.remoteMap) {
@@ -47,6 +49,7 @@ function NetbiosBroadcastMode(opts) {
 
   self._transactionIdFunc = opts.transactionIdFunc;
   self._broadcastFunc = opts.broadcastFunc;
+  self._unicastFunc = opts.unicastFunc;
   self._localMap = opts.localMap;
   self._remoteMap = opts.remoteMap;
 
@@ -127,7 +130,7 @@ NetbiosBroadcastMode.prototype.add = function(opts, callback) {
   });
 
   self._requestState[transactionId] = state;
-  self._sendRequest(request);
+  self._sendRequest(request, self._broadcastFunc);
 };
 
 NetbiosBroadcastMode.prototype.remove = function(opts, callback) {
@@ -159,7 +162,7 @@ NetbiosBroadcastMode.prototype.remove = function(opts, callback) {
   });
 
   this._localMap.remove(name, suffix);
-  this._sendRequest(request);
+  this._sendRequest(request, this._broadcastFunc);
 };
 
 NetbiosBroadcastMode.prototype.find = function(opts, callback) {
@@ -176,13 +179,13 @@ NetbiosBroadcastMode.prototype.find = function(opts, callback) {
     return;
   }
 
-  var transactionId = opts._transactionIdFunc();
+  var transactionId = self._transactionIdFunc();
   var request = {
     transactionId: transactionId,
     op: 'query',
     broadcast: true,
     recursionDesired: true,
-    questions: [ { name: name, suffix: suffix, type: 'nb', group: false } ]
+    questions: [{ name: name, suffix: suffix, type: 'nb', group: !!opts.group }]
   };
 
   var state = new State({
@@ -193,35 +196,49 @@ NetbiosBroadcastMode.prototype.find = function(opts, callback) {
     },
 
     responseFunc: function(response) {
-      // TODO: WINXP seems to perform an NBSTAT here before declaring success.
       var answer = response.answerRecords[0];
       var address = answer.nb.entries[0].address;
-      self._remoteMap.update(answer);
-      if (typeof callback === 'function') {
-        callback(answer.nb.entries[0].address);
-      }
-
-      // If we get another response packet then there is a conflict and we
-      // need to avoid treating this value as authoritative in our cache
-      state.responseFunc = function(response2) {
-        var answer2 = response2.answerRecords[0];
-        var address2 = answer2.nb.entries[0].address;
-        if (address !== address2) {
-          // TODO: send name conflict demand packet
-          self._remoteMap.remove(name, suffix);
+      // While not in the RFC, winxp seems to issue a status request before
+      // concluding that a particular answer is valid.  This is probably to
+      // guard against blatant spoofing.
+      opts.address = address;
+      self._sendStatus(opts, function(nbstat) {
+        if (!nbstat || nbstat.answerRecords.length < 1 ||
+            nbstat.answerRecords[0].nbstat.nodes.length < 1) {
+          return;
         }
-      };
 
-      // We only need to check for the conflicting responses for a limited
-      // time.  After that occurs, clear the request state.
-      setTimeout(function() {
-        delete self._requestState[transactionId];
-      }, CONFLICT_DELAY_MS);
+        self._remoteMap.update(answer);
+        if (typeof callback === 'function') {
+          callback(answer.nb.entries[0].address);
+        }
+
+        // If we get another response packet then there is a conflict and we
+        // need to avoid treating this value as authoritative in our cache
+        state.responseFunc = function(response2) {
+          var answer2 = response2.answerRecords[0];
+          var address2 = answer2.nb.entries[0].address;
+          if (address !== address2) {
+            self._sendConflict({
+              transactionId: self._transactionIdFunc(),
+              error: 'conflict',
+              record: answer
+            }, self._unicastFunc.bind(address2));
+            self._remoteMap.remove(name, suffix);
+          }
+        };
+
+        // We only need to check for the conflicting responses for a limited
+        // time.  After that occurs, clear the request state.
+        setTimeout(function() {
+          delete self._requestState[transactionId];
+        }, CONFLICT_DELAY_MS);
+      });
     }
   });
 
   self._requestState[transactionId] = state;
-  self._sendRequest(request);
+  self._sendRequest(request, self._broadcastFunc);
 };
 
 NetbiosBroadcastMode.prototype.onResponse = function(msg, sendFunc) {
@@ -266,21 +283,18 @@ NetbiosBroadcastMode.prototype.onRegistration = function(request, sendFunc) {
   // Check to see if we have this name claimed.  If both the local and remote
   // names are registered as a group, then there is no conflict.
   var localRec = this._localMap.getNb(rec.name, rec.suffix);
-  if (localRec &&
-      localRec.nb.entries[0].address != rec.nb.entries[0].address &&
-      (!localRec.nb.entries[0].group || !rec.nb.entries[0].group)) {
-
-    // Send a conflict response
-    var response = {
-      transactionId: request.transactionId,
-      response: true,
-      op: request.op,
-      authoritative: true,
-      error: 'active',
-      answerRecords: [localRec]
-    };
-    sendFunc(response);
+  if (!localRec ||
+      localRec.nb.entries[0].address === rec.nb.entries[0].address &&
+      (localRec.nb.entries[0].group && rec.nb.entries[0].group)) {
+    return;
   }
+
+  // Send a conflict response
+  this._sendConflict({
+    transactionId: request.transactionId,
+    error: 'active',
+    record: localRec
+  }, sendFunc);
 };
 
 NetbiosBroadcastMode.prototype.onRelease = function(request, sendFunc) {
@@ -302,8 +316,8 @@ NetbiosBroadcastMode.prototype.onRefresh = function(request, sendFunc) {
   }
 };
 
-NetbiosBroadcastMode.prototype._sendRequest = function(request) {
-  this._broadcastFunc(request);
+NetbiosBroadcastMode.prototype._sendRequest = function(request, sendFunc) {
+  sendFunc(request);
 
   var state = this._requestState[request.transactionId];
   if (state) {
@@ -312,7 +326,7 @@ NetbiosBroadcastMode.prototype._sendRequest = function(request) {
 
     // Schedule another packet if we have not hit the retry limit
     if (state.count < BCAST_RETRY_COUNT) {
-      var sendFunc = this._sendRequest.bind(this, request);
+      var sendFunc = this._sendRequest.bind(this, request, sendFunc);
       state.timerId = setTimeout(sendFunc, BCAST_RETRY_DELAY_MS);
 
     // Otherwise send no more requests and handle the "no response" condition
@@ -322,6 +336,18 @@ NetbiosBroadcastMode.prototype._sendRequest = function(request) {
       delete this._requestState[request.transactionId];
     }
   }
+};
+
+NetbiosBroadcastMode.prototype._sendConflict = function(opts, sendFunc) {
+  var response = {
+    transactionId: opts.transactionId,
+    response: true,
+    op: 'registration',
+    authoritative: true,
+    error: opts.error,
+    answerRecords: [opts.record]
+  };
+  sendFunc(response);
 };
 
 NetbiosBroadcastMode.prototype._sendRefresh = function(name, suffix) {
@@ -345,5 +371,29 @@ NetbiosBroadcastMode.prototype._sendRefresh = function(name, suffix) {
   // This is a one-shot send, so no need for response handlers
   delete this._requestState[transactionId];
 
-  this._sendRequest(request);
+  this._sendRequest(request, this._broadcastFunc);
+};
+
+NetbiosBroadcastMode.prototype._sendStatus = function(opts, callback) {
+  var self = this;
+  var transactionId = self._transactionIdFunc();
+  var request = {
+    transactionId: transactionId,
+    op: 'query',
+    recursionDesired: true,
+    questions: [ {name: opts.name, suffix: opts.suffix, type: 'nbstat',
+                  group: !!opts.group} ],
+  };
+
+  // TODO: The response handler should really detect if the truncation
+  //       bit is set and re-request the status over TCP.  Its unclear
+  //       how often this really happens in the real-world.
+
+  var state = new State({
+    responseFunc: callback,
+    noResponseFunc: callback
+  });
+
+  self._requestState[transactionId] = state;
+  self._sendRequest(request, this._unicastFunc.bind(null, opts.address));
 };

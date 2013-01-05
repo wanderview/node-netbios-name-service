@@ -40,20 +40,18 @@ serv.start(function() {
   });
 
   var name = 'VMWINXP.example.com';
-  /*
   serv.find({name: name, suffix: 0x00}, function(address) {
     console.log('FIND: [' + name + '] resulted in [' + address + ']');
   });
 
   var name2 = 'FOOBAR.example.com';
-  */
   serv.add({
-    name: name,
+    name: name2,
     suffix: 0x00,
     group: false,
     address: localAddress,
     ttl: 10,
   }, function(success) {
-    console.log('ADD: [' + name + '] resulted in [' + success + ']');
+    console.log('ADD: [' + name2 + '] resulted in [' + success + ']');
   });
 });

@@ -83,9 +83,12 @@ function NetbiosNameService(options) {
   var now = new Date();
   self._nextTransactionId = now.getTime() & 0xffff;
 
+  var broadcastAddress = '255.255.255.255';
+
   self._type = 'broadcast';
   self._mode = new Broadcast({
-    broadcastFunc: self._sendUdpMsg.bind(self, '255.255.255.255', UDP_PORT),
+    broadcastFunc: self._sendUdpMsg.bind(self, UDP_PORT, broadcastAddress),
+    unicastFunc: self._sendUdpMsg.bind(self, UDP_PORT),
     transactionIdFunc: self._newTransactionId.bind(self),
     localMap: self._localMap,
     remoteMap: self._remoteMap
@@ -237,12 +240,12 @@ NetbiosNameService.prototype._onUdpMsg = function(msg, rinfo) {
       return;
     }
 
-    self._onNetbiosMsg(nbmsg, self._sendUdpMsg.bind(self, rinfo.address,
-                                                    rinfo.port));
+    self._onNetbiosMsg(nbmsg, self._sendUdpMsg.bind(self, rinfo.port,
+                                                    rinfo.address));
   });
 };
 
-NetbiosNameService.prototype._sendUdpMsg = function(address, port, msg) {
+NetbiosNameService.prototype._sendUdpMsg = function(port, address, msg) {
   var self = this;
 
   // create a maximum sized buffer
