@@ -37,9 +37,12 @@ var Stream = require('./stream');
 var pack = require('./pack');
 var unpack = require('./unpack');
 
+var TCP_PORT = 137;
 var UDP_PORT = 137;
 
 // TODO: validate packets received before referencing fields
+// TODO: cleanup message structure, perhaps create Message class
+// TODO: create Name class
 
 util.inherits(NetbiosNameService, EventEmitter);
 
@@ -54,7 +57,7 @@ function NetbiosNameService(options) {
 
   self._tcpDisable = options.tcpDisable;
   if (!self._tcpDisable) {
-    self._tcpPort = options.tcpPort || 137;
+    self._tcpPort = options.tcpPort || TCP_PORT;
     self._tcpAddress = options.tcpAddress;
     self._tcpServer = options.tcpServer;
   }
@@ -74,10 +77,6 @@ function NetbiosNameService(options) {
   self._remoteMap.on('removed', self.emit.bind(self, 'removed'));
 
   self._localMap = new Map();
-  self._localMap.on('timeout', function(name, suffix) {
-    // TODO:  This is only done in point, mixed, and hybrid modes
-    //self._sendRefresh(name, suffix);
-  });
   self._localMap.on('added', self.emit.bind(self, 'added'));
   self._localMap.on('removed', self.emit.bind(self, 'removed'));
 
@@ -275,26 +274,21 @@ NetbiosNameService.prototype._onNetbiosMsg = function(msg, sendFunc) {
   if (msg.response) {
     this._mode.onResponse(msg, sendFunc);
   } else {
-    var modeOpts = {
-      request: msg,
-      sendFunc: sendFunc,
-    };
-
     switch (msg.op) {
       case 'query':
-        this._mode.onQuery(modeOpts);
+        this._mode.onQuery(msg, sendFunc);
         break;
       case 'registration':
-        this._mode.onRegistration(modeOpts);
+        this._mode.onRegistration(msg, sendFunc);
         break;
       case 'release':
-        this._mode.onRelease(modeOpts);
+        this._mode.onRelease(msg, sendFunc);
         break;
       case 'wack':
-        this._mode.onWack(modeOpts);
+        this._mode.onWack(msg, sendFunc);
         break;
       case 'refresh':
-        this._mode.onRefresh(modeOpts);
+        this._mode.onRefresh(msg, sendFunc);
         break;
       default:
         // do nothing

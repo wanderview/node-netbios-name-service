@@ -235,10 +235,7 @@ NetbiosBroadcastMode.prototype.onResponse = function(msg, sendFunc) {
   }
 };
 
-NetbiosBroadcastMode.prototype.onQuery = function(opts) {
-  var request = opts.request;
-  var sendFunc = opts.sendFunc;
-
+NetbiosBroadcastMode.prototype.onQuery = function(request, sendFunc) {
   var q = request.questions ? request.questions[0] : null;
   if (!q) {
     return;
@@ -263,8 +260,8 @@ NetbiosBroadcastMode.prototype.onQuery = function(opts) {
   }
 };
 
-NetbiosBroadcastMode.prototype.onRegistration = function(opts) {
-  var rec = opts.request.additionalRecords[0];
+NetbiosBroadcastMode.prototype.onRegistration = function(request, sendFunc) {
+  var rec = request.additionalRecords[0];
 
   // Check to see if we have this name claimed.  If both the local and remote
   // names are registered as a group, then there is no conflict.
@@ -275,28 +272,28 @@ NetbiosBroadcastMode.prototype.onRegistration = function(opts) {
 
     // Send a conflict response
     var response = {
-      transactionId: opts.request.transactionId,
+      transactionId: request.transactionId,
       response: true,
-      op: opts.request.op,
+      op: request.op,
       authoritative: true,
       error: 'active',
       answerRecords: [localRec]
     };
-    opts.sendFunc(response);
+    sendFunc(response);
   }
 };
 
-NetbiosBroadcastMode.prototype.onRelease = function(opts) {
-  var rec = opts.request.additionalRecords[0];
+NetbiosBroadcastMode.prototype.onRelease = function(request, sendFunc) {
+  var rec = request.additionalRecords[0];
   this._remoteMap.remove(rec.name, rec.suffix);
 };
 
-NetbiosBroadcastMode.prototype.onWack = function(opts) {
+NetbiosBroadcastMode.prototype.onWack = function(request, sendFunc) {
   // ignore for broadcast mode
 };
 
-NetbiosBroadcastMode.prototype.onRefresh = function(opts) {
-  var rec = opts.request.additionalRecords[0];
+NetbiosBroadcastMode.prototype.onRefresh = function(request, sendFunc) {
+  var rec = request.additionalRecords[0];
 
   // To be safe, ignore refresh requests for names we think we own.  This
   // shouldn't happen in theory.
