@@ -57,6 +57,9 @@ Please be aware of the following limitations:
   to interact with peer nodes on the local network.  The point-to-point,
   mixed, and hybrid modes are not yet implemented.  These would allow the
   service to interact with a name server such as WINS.
+* Group names are supported, but not tested yet.  In particular, it is
+  likely that you will only be notified of the first IP found and have no
+  way of finding the full list of addresses for nodes.
 * Requesting status from a node with a large number of names will currently
   result in an error.  In these cases the message may not fit within a UDP
   packet.  According to the RFC the packet should be marked as truncated and
