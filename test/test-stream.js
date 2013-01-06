@@ -1,6 +1,6 @@
 'use strict';
 
-var Stream = require('../stream');
+var Stream = require('../lib/stream');
 
 var net = require('net');
 var path = require('path');
