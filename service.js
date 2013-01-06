@@ -40,10 +40,8 @@ var TCP_PORT = 137;
 var UDP_PORT = 137;
 
 // TODO: validate packets received before referencing fields
-// TODO: write tests for broadcast mode
-// TODO: rework service tests now that the mode is external
 // TODO: cleanup message structure, perhaps create Message class
-// TODO: create Name class
+// TODO: consider creating Name class instead of using name+suffix everywhere
 // TODO: verify that group nodes work properly
 
 util.inherits(NetbiosNameService, EventEmitter);
@@ -85,7 +83,7 @@ function NetbiosNameService(options) {
   var now = new Date();
   self._nextTransactionId = now.getTime() & 0xffff;
 
-  var broadcastAddress = '255.255.255.255';
+  var broadcastAddress = options.broadcastAddress || '255.255.255.255';
 
   self._type = 'broadcast';
   self._mode = new Broadcast({
