@@ -1,7 +1,7 @@
 'use strict';
 
-var Broadcast = require('../broadcast');
-var Map = require('../map');
+var Broadcast = require('../lib/broadcast');
+var Map = require('../lib/map');
 
 module.exports.testBroadcast = function(test) {
   test.expect(1);

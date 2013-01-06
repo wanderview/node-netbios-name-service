@@ -1,6 +1,6 @@
 'use strict';
 
-var Message = require('../message');
+var Message = require('../lib/message');
 
 module.exports.testMessage = function(test) {
   test.expect(1);

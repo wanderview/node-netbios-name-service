@@ -1,7 +1,7 @@
 'use strict';
 
-var Point = require('../point');
-var Map = require('../map');
+var Point = require('../lib/point');
+var Map = require('../lib/map');
 
 module.exports.testPoint = function(test) {
   test.expect(1);

@@ -30,8 +30,8 @@ var dgram = require('dgram');
 var net = require('net');
 var util = require('util');
 
-var Broadcast = require('./broadcast');
-var Map = require('./map');
+var Broadcast = require('./lib/broadcast');
+var Map = require('./lib/map');
 var Stream = require('./stream');
 var pack = require('./pack');
 var unpack = require('./unpack');

@@ -1,7 +1,7 @@
 'use strict';
 
-var Hybrid = require('../hybrid');
-var Map = require('../map');
+var Hybrid = require('../lib/hybrid');
+var Map = require('../lib/map');
 
 module.exports.testHybrid = function(test) {
   test.expect(1);

@@ -25,7 +25,7 @@
 
 module.exports = unpack;
 
-var con = require('./constant');
+var con = require('./lib/constant');
 var unpackName = require('netbios-name/unpack');
 
 var ip = require('ip');

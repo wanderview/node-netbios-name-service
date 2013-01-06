@@ -1,6 +1,6 @@
 'use strict';
 
-var Map = require('../map');
+var Map = require('../lib/map');
 
 var timers = require('timers');
 
