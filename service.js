@@ -28,11 +28,12 @@ module.exports = NetbiosNameService;
 var EventEmitter = require('events').EventEmitter;
 var dgram = require('dgram');
 var net = require('net');
+var os = require('os');
 var util = require('util');
 
 var Broadcast = require('./lib/broadcast');
 var Map = require('./lib/map');
-var Stream = require('./stream');
+var Stream = require('./lib/stream');
 var pack = require('./pack');
 var unpack = require('./unpack');
 
@@ -55,19 +56,34 @@ function NetbiosNameService(options) {
 
   options = options || Object.create(null);
 
+  self._bindAddress = options.bindAddress;
+  if (self._bindAddress) {
+    self._localAddress = self._bindAddress;
+  } else {
+    var netList = os.networkInterfaces();
+    Object.keys(netList).some(function(iface) {
+      return netList[iface].some(function(addr) {
+        if (addr.family === 'IPv4' && !addr.internal) {
+          self._localAddress = addr.address;
+          return true;
+        }
+        return false;
+      });
+    });
+  }
+
+  console.log('local address [' + self._localAddress + ']');
+
   self._tcpDisable = options.tcpDisable;
   if (!self._tcpDisable) {
     self._tcpPort = options.tcpPort || TCP_PORT;
-    self._tcpAddress = options.tcpAddress;
     self._tcpServer = options.tcpServer;
   }
 
-  self._udpDisable = options.udpDisable;
-  if (!self._udpDisable) {
-    self._udpPort = options.udpPort || UDP_PORT;
-    self._udpAddress = options.udpAddress;
-    self._udpSocket = options.udpSocket;
-  }
+  self._udpPort = options.udpPort || UDP_PORT;
+  self._udpSocket = options.udpSocket;
+
+  self._defaultTtl = options.defaultTtl || 3600;
 
   self._remoteMap = new Map();
   self._remoteMap.on('timeout', function(name, suffix) {
@@ -128,6 +144,9 @@ NetbiosNameService.prototype.stop = function(callback) {
 };
 
 NetbiosNameService.prototype.add = function(opts, callback) {
+  opts.address = opts.address || this.localAddress;
+  opts.group = !!opts.group;
+  opts.ttl = opts.ttl || this.defaultTtl;
   this._mode.add(opts, callback);
 };
 
@@ -155,7 +174,7 @@ NetbiosNameService.prototype._startTcp = function(callback) {
     this._tcpServer.on('connection', this._onTcpConnect.bind(this));
 
     if (needListen) {
-      this._tcpServer.listen(this._tcpPort, this._tcpAddress, callback);
+      this._tcpServer.listen(this._tcpPort, this._bindAddress, callback);
       return;
     }
   }
@@ -206,7 +225,7 @@ NetbiosNameService.prototype._startUdp = function(callback) {
           callback();
         }
       });
-      self._udpSocket.bind(self._udpPort, self._udpAddress);
+      self._udpSocket.bind(self._udpPort, self._bindAddress);
       return;
     }
   }
