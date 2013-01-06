@@ -36,8 +36,6 @@ util.inherits(NetbiosNameMap, EventEmitter);
 var TIMER_DELAY_S = 1;
 var TIMER_DELAY_MS = TIMER_DELAY_S * 1000;
 
-// TODO: for groups this class needs to support multiple addresses per name
-
 function NetbiosNameMap(options) {
   var self = (this instanceof NetbiosNameMap)
            ? this

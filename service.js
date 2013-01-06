@@ -44,6 +44,7 @@ var UDP_PORT = 137;
 // TODO: rework service tests now that the mode is external
 // TODO: cleanup message structure, perhaps create Message class
 // TODO: create Name class
+// TODO: verify that group nodes work properly
 
 util.inherits(NetbiosNameService, EventEmitter);
 
@@ -179,9 +180,6 @@ NetbiosNameService.prototype._stopTcp = function(callback) {
 NetbiosNameService.prototype._onTcpConnect = function(socket) {
   var self = this;
   var stream = new Stream(socket);
-
-  // TODO: How do we handle socket teardown here?  Do we have to cleanup
-  //       anything to avoid memory leaks due to stale objects?
 
   stream.on('error', self.emit.bind(self, 'error'));
   stream.on('message', function(msg) {
