@@ -122,3 +122,42 @@ module.exports.testGetNbstat = function(test) {
 
   test.done();
 };
+
+module.exports.testEvents = function(test) {
+  test.expect(15);
+
+  var map = new Map({enableTimeouts: false});
+
+  var name = 'FOOBAR';
+  var suffix = 0x20;
+  var group = false;
+  var address = '127.0.0.1';
+  var ttl = 53;
+  var type = 'broadcast';
+
+  var validate = function(node) {
+    test.ok(node);
+    test.equal(node.name, name);
+    test.equal(node.suffix, suffix);
+    test.equal(node.address, address);
+    test.equal(node.group, group);
+    test.equal(node.type, type);
+    test.equal(node.ttl, ttl);
+  };
+
+  var added = false;
+
+  map.on('added', function(node) {
+    added = true;
+    validate(node);
+  });
+
+  map.on('removed', function(node) {
+    test.ok(added);
+    validate(node);
+    test.done();
+  });
+
+  map.add(name, suffix, group, address, ttl, type);
+  map.remove(name, suffix);
+};

@@ -26,15 +26,18 @@
 var Service = require('../service');
 
 var localAddress = '10.0.1.6';
-var serv = new Service();
+
+var serv = new Service({bindAddress: localAddress});
 
 serv.start(function() {
   serv.on('added', function(name, suffix, address) {
     console.log('ADDED: [' + name + '] [' + suffix + '] [' + address + ']');
   });
+
   serv.on('removed', function(name, suffix) {
     console.log('REMOVED: [' + name + '] [' + suffix + ']');
   });
+
   serv.on('error', function(error) {
     console.log('ERROR: [' + error + ']');
   });
@@ -48,10 +51,15 @@ serv.start(function() {
   serv.add({
     name: name2,
     suffix: 0x00,
-    group: false,
     address: localAddress,
-    ttl: 10,
+    ttl: 3600,
   }, function(success) {
     console.log('ADD: [' + name2 + '] resulted in [' + success + ']');
+  });
+
+  // The following will trigger the 'error' event due to the illegal name
+  var badName = 'THISISTOOLONGFORNETBIOS.example.com'
+  serv.find({name: badName, suffix: 0x00}, function(address) {
+    address === null;   // true
   });
 });
