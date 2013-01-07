@@ -25,8 +25,6 @@
 
 var Service = require('../service');
 
-var localAddress = '10.0.1.6';
-
 var serv = new Service();
 
 serv.start(function() {
@@ -52,7 +50,6 @@ serv.start(function() {
   serv.add({
     name: name2,
     suffix: 0x00,
-    address: localAddress,
     ttl: 3600,
   }, function(error, success) {
     console.log('ADD: [' + name2 + '] resulted in [' + success + ']');
