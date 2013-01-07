@@ -203,32 +203,28 @@ NetbiosNameService.prototype._onTcpConnect = function(socket) {
 
 NetbiosNameService.prototype._startUdp = function(callback) {
   var self = this;
-  if (!self._udpDisable) {
-    var needBind = false;
-    if (!self._udpSocket) {
-      self._udpSocket = dgram.createSocket('udp4');
-      needBind = true;
-    } else {
-      self._udpSocket.setBroadcast(true);
-    }
-
-    self._udpSocket.on('error', self.emit.bind(self, 'error'));
-    self._udpSocket.on('message', self._onUdpMsg.bind(self));
-
-    if (needBind) {
-      self._udpSocket.on('listening', function() {
-        self._udpSocket.setBroadcast(true);
-        if (typeof callback === 'function') {
-          callback();
-        }
-      });
-      self._udpSocket.bind(self._udpPort, self._bindAddress);
-      return;
-    }
+  var needBind = false;
+  if (!self._udpSocket) {
+    self._udpSocket = dgram.createSocket('udp4');
+    needBind = true;
+  } else {
+    // ensure the broadcast flag is set on the socket passed in
+    self._udpSocket.setBroadcast(true);
   }
 
-  if (typeof callback === 'function') {
-    callback();
+  self._udpSocket.on('error', self.emit.bind(self, 'error'));
+  self._udpSocket.on('message', self._onUdpMsg.bind(self));
+
+  if (needBind) {
+    self._udpSocket.on('listening', function() {
+      // The socket must be listening before we can enable the broadcast flag
+      self._udpSocket.setBroadcast(true);
+      if (typeof callback === 'function') {
+        callback();
+      }
+    });
+    self._udpSocket.bind(self._udpPort, self._bindAddress);
+    return;
   }
 };
 
