@@ -29,7 +29,7 @@ var net = require('net');
 var path = require('path');
 var pcap = require('pcap-parser');
 
-var unpack = require('../unpack');
+var unpack = require('../lib/unpack');
 
 // TODO: refactor helpers out to be more DRY
 

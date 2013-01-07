@@ -34,8 +34,8 @@ var util = require('util');
 var Broadcast = require('./lib/broadcast');
 var Map = require('./lib/map');
 var Stream = require('./lib/stream');
-var pack = require('./pack');
-var unpack = require('./unpack');
+var pack = require('./lib/pack');
+var unpack = require('./lib/unpack');
 
 var TCP_PORT = 137;
 var UDP_PORT = 137;

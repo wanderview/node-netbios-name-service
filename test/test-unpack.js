@@ -26,7 +26,7 @@
 var pcap = require('pcap-parser');
 var path = require('path');
 
-var unpack = require('../unpack');
+var unpack = require('../lib/unpack');
 
 //
 // Helper routines
