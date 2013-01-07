@@ -72,8 +72,6 @@ function NetbiosNameService(options) {
     });
   }
 
-  console.log('local address [' + self._localAddress + ']');
-
   self._tcpDisable = options.tcpDisable;
   if (!self._tcpDisable) {
     self._tcpPort = options.tcpPort || TCP_PORT;
@@ -104,7 +102,6 @@ function NetbiosNameService(options) {
   self._type = 'broadcast';
   self._mode = new Broadcast({
     broadcastFunc: self._sendUdpMsg.bind(self, UDP_PORT, broadcastAddress),
-    unicastFunc: self._sendUdpMsg.bind(self, UDP_PORT),
     transactionIdFunc: self._newTransactionId.bind(self),
     localMap: self._localMap,
     remoteMap: self._remoteMap
@@ -252,7 +249,9 @@ NetbiosNameService.prototype._onUdpMsg = function(msg, rinfo) {
   var self = this;
   unpack(msg, function(error, len, nbmsg) {
     if (error) {
-      self.emit('error', error);
+      // TODO: consider using a 'warning' event instead; avoid stopping service
+      //       due to a malformed packet received from a remote host
+      //self.emit('error', error);
       return;
     }
 
@@ -261,7 +260,7 @@ NetbiosNameService.prototype._onUdpMsg = function(msg, rinfo) {
   });
 };
 
-NetbiosNameService.prototype._sendUdpMsg = function(port, address, msg) {
+NetbiosNameService.prototype._sendUdpMsg = function(port, address, msg, callback) {
   var self = this;
 
   // create a maximum sized buffer
@@ -271,11 +270,15 @@ NetbiosNameService.prototype._sendUdpMsg = function(port, address, msg) {
 
   pack(buf, msg, function(error, len) {
     if (error) {
-      self.emit('error', error);
+      if (typeof callback === 'function') {
+        callback(error);
+      }
+      // TODO: consider using a 'warning' event instead; avoid stopping service
+      //self.emit('error', error);
       return;
     }
 
-    self._udpSocket.send(buf, 0, len, port, address);
+    self._udpSocket.send(buf, 0, len, port, address, callback);
   });
 };
 

@@ -37,7 +37,6 @@ module.exports.testRegistrationConflict = function(test) {
   var mode = new Broadcast({
     transactionIdFunc: function() { return 1234 },
     broadcastFunc: function(request) {},
-    unicastFunc: function(request) {},
     localMap: localMap,
     remoteMap: new Map({enableTimeouts: false})
   });
@@ -78,7 +77,6 @@ module.exports.testRegistrationNoConflict = function(test) {
   var mode = new Broadcast({
     transactionIdFunc: function() { return 1234 },
     broadcastFunc: function(request) {},
-    unicastFunc: function(request) {},
     localMap: new Map({enableTimeouts: false}),
     remoteMap: new Map({enableTimeouts: false})
   });
@@ -115,7 +113,6 @@ module.exports.testQueryNb = function(test) {
   var mode = new Broadcast({
     transactionIdFunc: function() { return 1234 },
     broadcastFunc: function(request) {},
-    unicastFunc: function(request) {},
     localMap: localMap,
     remoteMap: new Map({enableTimeouts: false})
   });
@@ -154,7 +151,6 @@ module.exports.testQueryNbMissing = function(test) {
   var mode = new Broadcast({
     transactionIdFunc: function() { return 1234 },
     broadcastFunc: function(request) {},
-    unicastFunc: function(request) {},
     localMap: new Map({enableTimeouts: false}),
     remoteMap: new Map({enableTimeouts: false})
   });
@@ -191,7 +187,6 @@ module.exports.testQueryNbstat = function(test) {
   var mode = new Broadcast({
     transactionIdFunc: function() { return 1234 },
     broadcastFunc: function(request) {},
-    unicastFunc: function(request) {},
     localMap: localMap,
     remoteMap: new Map({enableTimeouts: false})
   });
@@ -244,7 +239,7 @@ module.exports.testQueryNbstat = function(test) {
 };
 
 module.exports.testAddNoConflict = function(test) {
-  test.expect(50);
+  test.expect(51);
 
   var name = 'foobar.example.com';
   var suffix = 0x20;
@@ -258,7 +253,7 @@ module.exports.testAddNoConflict = function(test) {
 
     // Examine packets sent when we call add() below.  We expect
     // 3 registration packets and then one refresh packet.
-    broadcastFunc: function(request) {
+    broadcastFunc: function(request, callback) {
       if (count < 3) {
         test.equal(request.op, 'registration');
       } else {
@@ -278,9 +273,10 @@ module.exports.testAddNoConflict = function(test) {
       test.equal(a.nb.entries[0].address, address);
       test.equal(a.nb.entries[0].group, group);
       test.equal(a.nb.entries[0].type, 'broadcast');
+
+      callback(null);
     },
 
-    unicastFunc: function(request) {},
     localMap: new Map({enableTimeouts: false}),
     remoteMap: new Map({enableTimeouts: false})
   });
@@ -291,7 +287,8 @@ module.exports.testAddNoConflict = function(test) {
     group: group,
     ttl: ttl,
     address: address
-  }, function(success, conflictAddress) {
+  }, function(error, success, conflictAddress) {
+    test.ok(!error);
     test.ok(success);
     test.ok(!conflictAddress);
     test.done();
@@ -299,7 +296,7 @@ module.exports.testAddNoConflict = function(test) {
 };
 
 module.exports.testAddConflict = function(test) {
-  test.expect(3);
+  test.expect(4);
 
   var name = 'foobar.example.com';
   var suffix = 0x20;
@@ -316,7 +313,7 @@ module.exports.testAddConflict = function(test) {
     // Examine packets sent when we call add() below.  When we get the
     // registration packet, send back a conflict.  There should only be
     // the first request and then no more after the conflict is sent.
-    broadcastFunc: function(request) {
+    broadcastFunc: function(request, callback) {
       count += 1;
       mode.onResponse({
         transactionId: request.transactionId,
@@ -336,9 +333,9 @@ module.exports.testAddConflict = function(test) {
           }]}
         }]
       });
+      callback(null);
     },
 
-    unicastFunc: function(request) {},
     localMap: new Map({enableTimeouts: false}),
     remoteMap: new Map({enableTimeouts: false})
   });
@@ -349,7 +346,8 @@ module.exports.testAddConflict = function(test) {
     group: group,
     ttl: ttl,
     address: address
-  }, function(success, conflictAddress) {
+  }, function(error, success, conflictAddress) {
+    test.ok(!error);
     test.ok(!success);
     test.equal(conflictAddress, remoteAddress);
     test.equal(count, 1);
@@ -358,7 +356,7 @@ module.exports.testAddConflict = function(test) {
 };
 
 module.exports.testRemove = function(test) {
-  test.expect(37);
+  test.expect(38);
 
   var name = 'SNAFU';
   var suffix = 0x10;
@@ -370,7 +368,7 @@ module.exports.testRemove = function(test) {
     transactionIdFunc: function() { return 1234 },
 
     // We should see 3 release packets sent
-    broadcastFunc: function(request) {
+    broadcastFunc: function(request, callback) {
       test.equal(request.op, 'release');
       test.ok(request.broadcast);
       var q = request.questions[0];
@@ -385,16 +383,18 @@ module.exports.testRemove = function(test) {
       test.equal(a.nb.entries[0].address, '127.0.0.1');
       test.equal(a.nb.entries[0].group, group);
       test.equal(a.nb.entries[0].type, 'broadcast');
+
+      callback(null);
     },
 
-    unicastFunc: function(request) {},
     localMap: localMap,
     remoteMap: new Map({enableTimeouts: false})
   });
 
   addToMap(localMap, name, suffix, group);
 
-  mode.remove({ name: name, suffix: suffix }, function() {
+  mode.remove({ name: name, suffix: suffix }, function(error) {
+    test.ok(!error);
     test.ok(!localMap.contains(name, suffix));
     test.done();
   });
@@ -414,7 +414,7 @@ module.exports.testFind = function(test) {
     transactionIdFunc: function() { return 1234 },
 
     // We should see a query sent via broadcast.  Respond with the answer.
-    broadcastFunc: function(request) {
+    broadcastFunc: function(request, callback) {
       test.equal(request.op, 'query');
       test.ok(request.broadcast);
       var q = request.questions[0];
@@ -439,52 +439,56 @@ module.exports.testFind = function(test) {
             type: 'broadcast'
           }]}
         }]
+      },
+
+      // We should get one status request sent after we return the
+      // initial answer above.  Respond with the status info to complete
+      // the find operation.
+      function(request2, callback2) {
+        test.equal(request2.op, 'query');
+        test.ok(!request2.broadcast);
+        var q = request2.questions[0];
+        test.equal(q.name, name);
+        test.equal(q.suffix, suffix);
+        test.equal(q.type, 'nbstat');
+
+        mode.onResponse({
+          transactionId: request2.transactionId,
+          op: 'query',
+          response: true,
+          authoritative: true,
+          questions: request2.questions,
+          answerRecords: [{
+            name: name,
+            suffix: suffix,
+            ttl: 3600,
+            type: 'nbstat',
+            nbstat: {
+              unitId: '00:00:00:00:00:00',
+              nodes: [{
+                name: name,
+                suffix: suffix,
+                type: 'broadcast',
+                group: false,
+                active: true
+              }]
+            }
+          }]
+        });
+
+        callback2(null);
       });
+
+      callback(null);
     },
 
-    // We should get one status request unicast after we return the
-    // initial answer above.  Respond with the status info to complete
-    // the find operation.
-    unicastFunc: function(address, request) {
-      test.equal(address, remoteAddress);
-
-      test.equal(request.op, 'query');
-      test.ok(!request.broadcast);
-      var q = request.questions[0];
-      test.equal(q.name, name);
-      test.equal(q.suffix, suffix);
-      test.equal(q.type, 'nbstat');
-
-      mode.onResponse({
-        transactionId: request.transactionId,
-        op: 'query',
-        response: true,
-        authoritative: true,
-        questions: request.questions,
-        answerRecords: [{
-          name: name,
-          suffix: suffix,
-          ttl: 3600,
-          type: 'nbstat',
-          nbstat: {
-            unitId: '00:00:00:00:00:00',
-            nodes: [{
-              name: name,
-              suffix: suffix,
-              type: 'broadcast',
-              group: false,
-              active: true
-            }]
-          }
-        }]
-      });
-    },
 
     localMap: new Map({enableTimeouts: false}),
     remoteMap: remoteMap
   });
 
-  mode.find({name: name, suffix: suffix}, function(address) {
+  mode.find({name: name, suffix: suffix}, function(error, address) {
+    test.ok(!error);
     test.equal(address, remoteAddress);
     test.ok(remoteMap.contains(name, suffix));
     test.done();

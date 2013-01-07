@@ -27,15 +27,16 @@ var Service = require('../service');
 
 var localAddress = '10.0.1.6';
 
-var serv = new Service({bindAddress: localAddress});
+var serv = new Service();
 
 serv.start(function() {
-  serv.on('added', function(name, suffix, address) {
-    console.log('ADDED: [' + name + '] [' + suffix + '] [' + address + ']');
+  serv.on('added', function(opts) {
+    console.log('ADDED: [' + opts.name + '] [' + opts.suffix + '] [' +
+                opts.address + ']');
   });
 
-  serv.on('removed', function(name, suffix) {
-    console.log('REMOVED: [' + name + '] [' + suffix + ']');
+  serv.on('removed', function(opts) {
+    console.log('REMOVED: [' + opts.name + '] [' + opts.suffix + ']');
   });
 
   serv.on('error', function(error) {
@@ -43,7 +44,7 @@ serv.start(function() {
   });
 
   var name = 'VMWINXP.example.com';
-  serv.find({name: name, suffix: 0x00}, function(address) {
+  serv.find({name: name, suffix: 0x00}, function(error, address) {
     console.log('FIND: [' + name + '] resulted in [' + address + ']');
   });
 
@@ -53,13 +54,14 @@ serv.start(function() {
     suffix: 0x00,
     address: localAddress,
     ttl: 3600,
-  }, function(success) {
+  }, function(error, success) {
     console.log('ADD: [' + name2 + '] resulted in [' + success + ']');
   });
 
-  // The following will trigger the 'error' event due to the illegal name
   var badName = 'THISISTOOLONGFORNETBIOS.example.com'
-  serv.find({name: badName, suffix: 0x00}, function(address) {
+  serv.find({name: badName, suffix: 0x00}, function(error, address) {
+    console.log('FIND: returned error [' + error + ']');
     address === null;   // true
   });
 });
+
