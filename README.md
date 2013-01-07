@@ -5,19 +5,16 @@ A 100% javascript implemention of the NetBIOS name service defined in
 
 ## Example
 
-    var Service = require('netbios-name-service');
-
-    var localAddress = '10.0.1.6';
-
-    var serv = new Service({bindAddress: localAddress});
+    var serv = new Service();
 
     serv.start(function() {
-      serv.on('added', function(name, suffix, address) {
-        console.log('ADDED: [' + name + '] [' + suffix + '] [' + address + ']');
+      serv.on('added', function(opts) {
+        console.log('ADDED: [' + opts.name + '] [' + opts.suffix + '] [' +
+                    opts.address + ']');
       });
 
-      serv.on('removed', function(name, suffix) {
-        console.log('REMOVED: [' + name + '] [' + suffix + ']');
+      serv.on('removed', function(opts) {
+        console.log('REMOVED: [' + opts.name + '] [' + opts.suffix + ']');
       });
 
       serv.on('error', function(error) {
@@ -25,7 +22,7 @@ A 100% javascript implemention of the NetBIOS name service defined in
       });
 
       var name = 'VMWINXP.example.com';
-      serv.find({name: name, suffix: 0x00}, function(address) {
+      serv.find({name: name, suffix: 0x00}, function(error, address) {
         console.log('FIND: [' + name + '] resulted in [' + address + ']');
       });
 
@@ -33,15 +30,14 @@ A 100% javascript implemention of the NetBIOS name service defined in
       serv.add({
         name: name2,
         suffix: 0x00,
-        address: localAddress,
         ttl: 3600,
-      }, function(success) {
+      }, function(error, success) {
         console.log('ADD: [' + name2 + '] resulted in [' + success + ']');
       });
 
-      // The following will trigger the 'error' event due to the illegal name
       var badName = 'THISISTOOLONGFORNETBIOS.example.com'
-      serv.find({name: badName, suffix: 0x00}, function(address) {
+      serv.find({name: badName, suffix: 0x00}, function(error, address) {
+        console.log('FIND: returned error [' + error + ']');
         address === null;   // true
       });
     });
@@ -66,10 +62,10 @@ Please be aware of the following limitations:
   re-requested over TCP.  Neither of these actions are currently implemented.
 * The service has only been lightly tested on networks with a few nodes.  In
   particular, many of the name conflict corner cases have not been tested in a
-  live environment and may contain hidden issues.  Any help testing the service
-  in larger networks is appreciated.
+  live environment and may contain hidden issues.
 * The API should be considered unstable as it may change in future versions.
-  Feedback welcome.
+
+Feedback, testing help, and pull requests welcome.
 
 ## Class: NetbiosNameService
 
@@ -138,9 +134,16 @@ Register the given name for the local NetBIOS node.
     to the `defaultTtl` value passed in the `new NetbiosNameService()` options.
 * `callback` {Function | null} Callback issued when the requested name has
   been successfully added as a local node or definitively failed.
+  * `error` {Object} The `Error` object associated with any exception
+    conditions and `null` if none occurred.  Note, the `add()` call can still
+    fail due to a name conflict and set the `success` argument `false` without
+    passing an `error`.  The `error` is more for things like malformed packets
+    and network errors.
   * `success` {Boolean} True if the name was successfuly registered for the
     local node.  False if the name is already in use on the network by a
     conflicting node.
+  * `conflictAddress` {String} The IP address of the NetBIOS node that
+    currently owns the specified name. `null` if no conflict is detected.
 
 ### service.remove(options, callback)
 
@@ -153,6 +156,8 @@ Deregister the given name from the local NetBIOS node.
     previously used when registering the name.
 * `callback` {Function | null} Callback issued when the requested name has
   been successfully deregistered for the local node.
+  * `error` {Object} The `Error` object associated with any exceptional
+    conditions.
 
 ### service.find(options, callback)
 
@@ -163,6 +168,8 @@ Search for a NetBIOS name with the given name.
   * `suffix` {Number} The suffix byte indicating the type of node to find.
 * `callback` {Function} Callback issued when the specified name has been
   found or the service has failed the request.
+  * `error` {Object} The `Error` object associated with any exceptional
+    conditions.
   * `node` {Object} The found NetBIOS node information or null if the search
     failed.
     * `name` {String} The NetBIOS name of the node.
@@ -200,6 +207,13 @@ removed either due to release or cache expiration.
     unique name.
   * `ttl` {Number} The time-to-live of the node.
   * `type` {String} The mode of the node such as 'broadcast' or 'hybrid'.
+
+### service.on('error', error)
+
+An event emitted when unhandled exceptional conditions occur.  Normally
+this will only be things like failing to bind network sockets, etc.
+
+* `error` {Object}  The `Error` object
 
 [RFC1001]: http://tools.ietf.org/rfc/rfc1001.txt
 [RFC1002]: http://tools.ietf.org/rfc/rfc1002.txt
