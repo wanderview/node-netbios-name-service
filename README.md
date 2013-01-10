@@ -5,38 +5,40 @@ A 100% javascript implemention of the NetBIOS name service defined in
 
 ## Example
 
+    var Service = require('netbios-name-service');
+    var NBName = require('netbios-name');
+
     var serv = new Service();
 
     serv.start(function() {
       serv.on('added', function(opts) {
-        console.log('ADDED: [' + opts.name + '] [' + opts.suffix + '] [' +
+        console.log('ADDED: [' + opts.nbname + '] [' +
                     opts.address + ']');
       });
 
       serv.on('removed', function(opts) {
-        console.log('REMOVED: [' + opts.name + '] [' + opts.suffix + ']');
+        console.log('REMOVED: [' + opts.nbname + ']');
       });
 
       serv.on('error', function(error) {
         console.log('ERROR: [' + error + ']');
       });
 
-      var name = 'VMWINXP.example.com';
-      serv.find({name: name, suffix: 0x00}, function(error, address) {
-        console.log('FIND: [' + name + '] resulted in [' + address + ']');
+      var nbname = new NBName({fqdn: 'VMWINXP.example.com'});
+      serv.find(nbname, function(error, address) {
+        console.log('FIND: [' + nbname + '] resulted in [' + address + ']');
       });
 
-      var name2 = 'FOOBAR.example.com';
+      var nbname2 = new NBName({fqdn: 'FOOBAR.example.com'});
       serv.add({
-        name: name2,
-        suffix: 0x00,
+        nbname: nbname2,
         ttl: 3600,
       }, function(error, success) {
-        console.log('ADD: [' + name2 + '] resulted in [' + success + ']');
+        console.log('ADD: [' + nbname2 + '] resulted in [' + success + ']');
       });
 
-      var badName = 'THISISTOOLONGFORNETBIOS.example.com'
-      serv.find({name: badName, suffix: 0x00}, function(error, address) {
+      var badNBName = new NBName({fqdn: 'THISISTOOLONGFORNETBIOS.example.com'});
+      serv.find(badNBName, function(error, address) {
         console.log('FIND: returned error [' + error + ']');
         address === null;   // true
       });
@@ -59,7 +61,7 @@ Please be aware of the following limitations:
 * Requesting status from a node with a large number of names will currently
   result in an error.  In these cases the message may not fit within a UDP
   packet.  According to the RFC the packet should be marked as truncated and
-  re-requested over TCP.  Neither of these actions are currently implemented.
+ re-requested over TCP.  Neither of these actions are currently implemented.
 * The service has only been lightly tested on networks with a few nodes.  In
   particular, many of the name conflict corner cases have not been tested in a
   live environment and may contain hidden issues.
@@ -120,11 +122,9 @@ events to be fired for existing names.
 Register the given name for the local NetBIOS node.
 
 * `options` {Object}
-  * `name` {String} The NetBIOS name to register for the local node.  This
-    name can be a fully qualified domain name, but the first part must be
-    15 characters or less.  Longer names will result in failure and an
-    `'error'` event being issued.
-  * `suffix` {Number} The suffix byte indicating the type of the node.
+  * `nbname` {Object} The NetBIOS name to register for the local node.  This
+    must be an instance of the NetbiosName class defined in the [netbios-name][]
+    module.
   * `address` {String | null} The address to use for the local node.  Defaults
     to the `bindAddress` passed in the `new NetbiosNameService()` options or
     the first non-internal, IPv4 address returned by `os.networkInterfaces()`.
@@ -145,35 +145,29 @@ Register the given name for the local NetBIOS node.
   * `conflictAddress` {String} The IP address of the NetBIOS node that
     currently owns the specified name. `null` if no conflict is detected.
 
-### service.remove(options, callback)
+### service.remove(nbname, callback)
 
 Deregister the given name from the local NetBIOS node.
 
-* `options` {Object}
-  * `name` {String} The NetBIOS name to remove that has been registered for
-    the local node with a previous call to `add()`.
-  * `suffix` {Number} The suffix byte indicating the node type that was
-    previously used when registering the name.
+* `nbname` {Object} The NetBIOS name object to remove that has been registered
+  for the local node with a previous call to `add()`.
 * `callback` {Function | null} Callback issued when the requested name has
   been successfully deregistered for the local node.
   * `error` {Object} The `Error` object associated with any exceptional
     conditions.
 
-### service.find(options, callback)
+### service.find(nbname, callback)
 
 Search for a NetBIOS name with the given name.
 
-* `options` {Object}
-  * `name` {String} The NetBIOS name to find.
-  * `suffix` {Number} The suffix byte indicating the type of node to find.
+* `nbname` {Object} The NetBIOS name to find.
 * `callback` {Function} Callback issued when the specified name has been
   found or the service has failed the request.
   * `error` {Object} The `Error` object associated with any exceptional
     conditions.
   * `node` {Object} The found NetBIOS node information or null if the search
     failed.
-    * `name` {String} The NetBIOS name of the node.
-    * `suffix` {Number} The suffix byte indicating the type of the node.
+    * `nbname` {Object} The NetBIOS name of the node.
     * `address` {String} The IPv4 address for the node.
     * `group` {Boolean} A flag indicating if the found name is a group or
       unique name.
@@ -186,8 +180,7 @@ An event emitted when either a local is registered or a remote name is
 discovered.
 
 * `node` {Object}
-  * `name` {String} The NetBIOS name of the node.
-  * `suffix` {Number} The suffix byte indicating the type of the node.
+  * `nbname` {Object} The NetBIOS name of the node.
   * `address` {String} The IPv4 address for the node.
   * `group` {Boolean} A flag indicating if the found name is a group or
     unique name.
@@ -200,8 +193,7 @@ An event emitted when either a local name is deregistered or remote name is
 removed either due to release or cache expiration.
 
 * `node` {Object}
-  * `name` {String} The NetBIOS name of the node.
-  * `suffix` {Number} The suffix byte indicating the type of the node.
+  * `nbname` {Object} The NetBIOS name of the node.
   * `address` {String} The IPv4 address for the node.
   * `group` {Boolean} A flag indicating if the found name is a group or
     unique name.
@@ -217,3 +209,4 @@ this will only be things like failing to bind network sockets, etc.
 
 [RFC1001]: http://tools.ietf.org/rfc/rfc1001.txt
 [RFC1002]: http://tools.ietf.org/rfc/rfc1002.txt
+[netbios-name]: https://github.com/wanderview/node-netbios-name

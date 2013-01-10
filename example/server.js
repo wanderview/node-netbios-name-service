@@ -25,40 +25,40 @@
 
 var Service = require('../service');
 
+var NBName = require('netbios-name');
+
 var serv = new Service();
 
 serv.start(function() {
   serv.on('added', function(opts) {
-    console.log('ADDED: [' + opts.name + '] [' + opts.suffix + '] [' +
+    console.log('ADDED: [' + opts.nbname + '] [' +
                 opts.address + ']');
   });
 
   serv.on('removed', function(opts) {
-    console.log('REMOVED: [' + opts.name + '] [' + opts.suffix + ']');
+    console.log('REMOVED: [' + opts.nbname + ']');
   });
 
   serv.on('error', function(error) {
     console.log('ERROR: [' + error + ']');
   });
 
-  var name = 'VMWINXP.example.com';
-  serv.find({name: name, suffix: 0x00}, function(error, address) {
-    console.log('FIND: [' + name + '] resulted in [' + address + ']');
+  var nbname = new NBName({fqdn: 'VMWINXP.example.com'});
+  serv.find(nbname, function(error, address) {
+    console.log('FIND: [' + nbname + '] resulted in [' + address + ']');
   });
 
-  var name2 = 'FOOBAR.example.com';
+  var nbname2 = new NBName({fqdn: 'FOOBAR.example.com'});
   serv.add({
-    name: name2,
-    suffix: 0x00,
+    nbname: nbname2,
     ttl: 3600,
   }, function(error, success) {
-    console.log('ADD: [' + name2 + '] resulted in [' + success + ']');
+    console.log('ADD: [' + nbname2 + '] resulted in [' + success + ']');
   });
 
-  var badName = 'THISISTOOLONGFORNETBIOS.example.com'
-  serv.find({name: badName, suffix: 0x00}, function(error, address) {
+  var badNBName = new NBName({fqdn: 'THISISTOOLONGFORNETBIOS.example.com'});
+  serv.find(badNBName, function(error, address) {
     console.log('FIND: returned error [' + error + ']');
     address === null;   // true
   });
 });
-
