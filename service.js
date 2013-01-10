@@ -42,7 +42,6 @@ var UDP_PORT = 137;
 
 // TODO: validate packets received before referencing fields
 // TODO: cleanup message structure, perhaps create Message class
-// TODO: consider creating Name class instead of using name+suffix everywhere
 // TODO: verify that group nodes work properly
 
 util.inherits(NetbiosNameService, EventEmitter);
@@ -84,9 +83,7 @@ function NetbiosNameService(options) {
   self._defaultTtl = options.defaultTtl || 3600;
 
   self._remoteMap = new Map();
-  self._remoteMap.on('timeout', function(name, suffix) {
-    self._remoteMap.remove(name, suffix);
-  });
+  self._remoteMap.on('timeout', self._remoteMap.remove.bind(self._remoteMap));
   self._remoteMap.on('added', self.emit.bind(self, 'added'));
   self._remoteMap.on('removed', self.emit.bind(self, 'removed'));
 

@@ -25,12 +25,12 @@
 
 var Broadcast = require('../lib/broadcast');
 var Map = require('../lib/map');
+var NBName = require('netbios-name');
 
 module.exports.testRegistrationConflict = function(test) {
-  test.expect(7);
+  test.expect(6);
 
-  var name = 'foobar.example.com';
-  var suffix = 0x20;
+  var nbname = new NBName({fqdn: 'foobar.example.com', suffix: 0x20});
 
   var localMap = new Map({enableTimeouts: false});
 
@@ -41,17 +41,17 @@ module.exports.testRegistrationConflict = function(test) {
     remoteMap: new Map({enableTimeouts: false})
   });
 
-  addToMap(localMap, name, suffix, false);
+  addToMap(localMap, nbname, false);
 
   var request = {
     transactionId: 12345,
     op: 'registration',
     recursionDesired: true,
     questions: [
-      { name: name, suffix: suffix, type: 'nb' }
+      { nbname: nbname, type: 'nb' }
     ],
     additionalRecords: [
-      { name: name, suffix: suffix, type: 'nb', ttl: 3600,
+      { nbname: nbname, type: 'nb', ttl: 3600,
         nb: { entries: [{ address: '1.1.1.1', type: 'broadcast', group: false }]}}
     ]
   };
@@ -62,8 +62,7 @@ module.exports.testRegistrationConflict = function(test) {
     test.equal(msg.op, 'registration');
     test.equal(msg.error, 'active');
     test.equal(msg.answerRecords.length, 1);
-    test.equal(msg.answerRecords[0].name, name);
-    test.equal(msg.answerRecords[0].suffix, suffix);
+    test.equal(msg.answerRecords[0].nbname.toString(), nbname.toString());
     test.done();
   });
 };
@@ -71,8 +70,7 @@ module.exports.testRegistrationConflict = function(test) {
 module.exports.testRegistrationNoConflict = function(test) {
   test.expect(1);
 
-  var name = 'foobar.example.com';
-  var suffix = 0x20;
+  var nbname = new NBName({fqdn: 'foobar.example.com', suffix: 0x20});
 
   var mode = new Broadcast({
     transactionIdFunc: function() { return 1234 },
@@ -86,10 +84,10 @@ module.exports.testRegistrationNoConflict = function(test) {
     op: 'registration',
     recursionDesired: true,
     questions: [
-      { name: name, suffix: suffix, type: 'nb', group: false }
+      { nbname: nbname, type: 'nb', group: false }
     ],
     additionalRecords: [
-      { name: name, suffix: suffix, type: 'nb', ttl: 3600,
+      { nbname: nbname, type: 'nb', ttl: 3600,
         nb: { entries: [{ address: '1.1.1.1', type: 'broadcast', group: false }]}}
     ]
   };
@@ -106,7 +104,7 @@ module.exports.testRegistrationNoConflict = function(test) {
 };
 
 module.exports.testQueryNb = function(test) {
-  test.expect(8);
+  test.expect(7);
 
   var localMap = new Map({enableTimeouts: false});
 
@@ -117,18 +115,17 @@ module.exports.testQueryNb = function(test) {
     remoteMap: new Map({enableTimeouts: false})
   });
 
-  var name = 'foobar.example.com';
-  var suffix = 0x20;
+  var nbname = new NBName({fqdn: 'foobar.example.com', suffix: 0x20});
   var group = false;
 
-  addToMap(localMap, name, suffix, group);
+  addToMap(localMap, nbname, group);
 
   var request = {
     transactionId: 67890,
     op: 'query',
     recursionDesired: true,
     questions: [
-      { name: name, suffix: suffix, type: 'nb', group: group }
+      { nbname: nbname, type: 'nb', group: group }
     ]
   };
 
@@ -138,8 +135,7 @@ module.exports.testQueryNb = function(test) {
     test.equal(msg.op, 'query');
     test.ok(!msg.error);
     test.equal(msg.answerRecords.length, 1);
-    test.equal(msg.answerRecords[0].name, name);
-    test.equal(msg.answerRecords[0].suffix, suffix);
+    test.equal(msg.answerRecords[0].nbname, nbname);
     test.equal(msg.answerRecords[0].type, 'nb');
     test.done();
   });
@@ -155,8 +151,7 @@ module.exports.testQueryNbMissing = function(test) {
     remoteMap: new Map({enableTimeouts: false})
   });
 
-  var name = 'foobar.example.com';
-  var suffix = 0x20;
+  var nbname = new NBName({fqdn: 'foobar.example.com', suffix: 0x20});
   var group = false;
 
   var request = {
@@ -164,7 +159,7 @@ module.exports.testQueryNbMissing = function(test) {
     op: 'query',
     recursionDesired: true,
     questions: [
-      { name: name, suffix: suffix, type: 'nb', group: group }
+      { nbname: nbname, type: 'nb', group: group }
     ]
   };
 
@@ -180,7 +175,7 @@ module.exports.testQueryNbMissing = function(test) {
 };
 
 module.exports.testQueryNbstat = function(test) {
-  test.expect(11);
+  test.expect(10);
 
   var localMap = new Map({enableTimeouts: false});
 
@@ -192,16 +187,15 @@ module.exports.testQueryNbstat = function(test) {
   });
 
   var names = [
-    'foobar.example.com',
-    'snafu.example.com',
-    'foobar',
-    'snafu'
+    new NBName({fqdn: 'foobar.example.com'}),
+    new NBName({fqdn: 'snafu.example.com'}),
+    new NBName({fqdn: 'foobar'}),
+    new NBName({fqdn: 'snafu'})
   ];
-  var suffix = 0x20;
   var group = false;
 
-  names.forEach(function(name) {
-    addToMap(localMap, name, suffix, group);
+  names.forEach(function(nbname) {
+    addToMap(localMap, nbname, group);
   });
 
   var request = {
@@ -209,7 +203,7 @@ module.exports.testQueryNbstat = function(test) {
     op: 'query',
     recursionDesired: true,
     questions: [
-      { name: names[0], suffix: suffix, type: 'nbstat', group: group }
+      { nbname: names[0], type: 'nbstat', group: group }
     ]
   };
 
@@ -220,8 +214,7 @@ module.exports.testQueryNbstat = function(test) {
     test.ok(!msg.error);
     test.equal(msg.answerRecords.length, 1);
     var answer = msg.answerRecords[0];
-    test.equal(answer.name, names[0]);
-    test.equal(answer.suffix, suffix);
+    test.equal(answer.nbname.toString(), names[0].toString());
     test.equal(answer.type, 'nbstat');
 
     // we should only get the first two names because the results are filtered
@@ -229,20 +222,19 @@ module.exports.testQueryNbstat = function(test) {
     test.equal(answer.nbstat.nodes.length, 2);
     var foundNames = {};
     answer.nbstat.nodes.forEach(function(node) {
-      foundNames[node.name] = true;
+      foundNames[node.nbname.toString()] = true;
     });
-    test.ok(foundNames[names[0]]);
-    test.ok(foundNames[names[1]]);
+    test.ok(foundNames[names[0].toString()]);
+    test.ok(foundNames[names[1].toString()]);
 
     test.done();
   });
 };
 
 module.exports.testAddNoConflict = function(test) {
-  test.expect(51);
+  test.expect(43);
 
-  var name = 'foobar.example.com';
-  var suffix = 0x20;
+  var nbname = new NBName({fqdn: 'foobar.example.com'});
   var group = false;
   var ttl = 10;
   var address = '127.0.0.1';
@@ -262,12 +254,10 @@ module.exports.testAddNoConflict = function(test) {
       count += 1;
       test.ok(request.broadcast);
       var q = request.questions[0];
-      test.equal(q.name, name);
-      test.equal(q.suffix, suffix);
+      test.equal(q.nbname.toString(), nbname.toString());
       test.equal(q.type, 'nb');
       var a = request.additionalRecords[0];
-      test.equal(a.name, name);
-      test.equal(a.suffix, suffix);
+      test.equal(a.nbname.toString(), nbname.toString());
       test.equal(a.ttl, ttl);
       test.equal(a.type, 'nb');
       test.equal(a.nb.entries[0].address, address);
@@ -282,8 +272,7 @@ module.exports.testAddNoConflict = function(test) {
   });
 
   mode.add({
-    name: name,
-    suffix: suffix,
+    nbname: nbname,
     group: group,
     ttl: ttl,
     address: address
@@ -298,8 +287,7 @@ module.exports.testAddNoConflict = function(test) {
 module.exports.testAddConflict = function(test) {
   test.expect(4);
 
-  var name = 'foobar.example.com';
-  var suffix = 0x20;
+  var nbname = new NBName({fqdn: 'foobar.example.com', suffix: 0x20});
   var group = false;
   var ttl = 10;
   var address = '127.0.0.1';
@@ -323,8 +311,7 @@ module.exports.testAddConflict = function(test) {
         authoritative: true,
         questions: request.questions,
         answerRecords: [{
-          name: name,
-          suffix: suffix,
+          nbname: nbname,
           ttl: 60,
           nb: { entries: [{
             address: remoteAddress,
@@ -341,8 +328,7 @@ module.exports.testAddConflict = function(test) {
   });
 
   mode.add({
-    name: name,
-    suffix: suffix,
+    nbname: nbname,
     group: group,
     ttl: ttl,
     address: address
@@ -356,10 +342,9 @@ module.exports.testAddConflict = function(test) {
 };
 
 module.exports.testRemove = function(test) {
-  test.expect(38);
+  test.expect(32);
 
-  var name = 'SNAFU';
-  var suffix = 0x10;
+  var nbname = new NBName({fqdn: 'SNAFU', suffix: 0x10});
   var group = false;
 
   var localMap = new Map({enableTimeouts: false});
@@ -372,12 +357,10 @@ module.exports.testRemove = function(test) {
       test.equal(request.op, 'release');
       test.ok(request.broadcast);
       var q = request.questions[0];
-      test.equal(q.name, name);
-      test.equal(q.suffix, suffix);
+      test.equal(q.nbname.toString(), nbname.toString());
       test.equal(q.type, 'nb');
       var a = request.additionalRecords[0];
-      test.equal(a.name, name);
-      test.equal(a.suffix, suffix);
+      test.equal(a.nbname.toString(), nbname.toString());
       test.equal(a.ttl, 10);
       test.equal(a.type, 'nb');
       test.equal(a.nb.entries[0].address, '127.0.0.1');
@@ -391,20 +374,19 @@ module.exports.testRemove = function(test) {
     remoteMap: new Map({enableTimeouts: false})
   });
 
-  addToMap(localMap, name, suffix, group);
+  addToMap(localMap, nbname, group);
 
-  mode.remove({ name: name, suffix: suffix }, function(error) {
+  mode.remove(nbname, function(error) {
     test.ok(!error);
-    test.ok(!localMap.contains(name, suffix));
+    test.ok(!localMap.contains(nbname));
     test.done();
   });
 };
 
 module.exports.testFind = function(test) {
-  test.expect(13);
+  test.expect(11);
 
-  var name = 'VMWINXP';
-  var suffix = 0x20;
+  var nbname = new NBName({fqdn: 'VMWINXP', suffix: 0x20});
 
   var remoteMap = new Map({enableTimeouts: false});
 
@@ -418,8 +400,7 @@ module.exports.testFind = function(test) {
       test.equal(request.op, 'query');
       test.ok(request.broadcast);
       var q = request.questions[0];
-      test.equal(q.name, name);
-      test.equal(q.suffix, suffix);
+      test.equal(q.nbname.toString(), nbname.toString());
       test.equal(q.type, 'nb');
 
       mode.onResponse({
@@ -429,8 +410,7 @@ module.exports.testFind = function(test) {
         authoritative: true,
         questions: request.questions,
         answerRecords: [{
-          name: name,
-          suffix: suffix,
+          nbname: nbname,
           ttl: 3600,
           type: 'nb',
           nb: { entries: [{
@@ -448,8 +428,7 @@ module.exports.testFind = function(test) {
         test.equal(request2.op, 'query');
         test.ok(!request2.broadcast);
         var q = request2.questions[0];
-        test.equal(q.name, name);
-        test.equal(q.suffix, suffix);
+        test.equal(q.nbname.toString(), nbname.toString());
         test.equal(q.type, 'nbstat');
 
         mode.onResponse({
@@ -459,15 +438,13 @@ module.exports.testFind = function(test) {
           authoritative: true,
           questions: request2.questions,
           answerRecords: [{
-            name: name,
-            suffix: suffix,
+            nbname: nbname,
             ttl: 3600,
             type: 'nbstat',
             nbstat: {
               unitId: '00:00:00:00:00:00',
               nodes: [{
-                name: name,
-                suffix: suffix,
+                nbname: nbname,
                 type: 'broadcast',
                 group: false,
                 active: true
@@ -487,14 +464,14 @@ module.exports.testFind = function(test) {
     remoteMap: remoteMap
   });
 
-  mode.find({name: name, suffix: suffix}, function(error, address) {
+  mode.find(nbname, function(error, address) {
     test.ok(!error);
     test.equal(address, remoteAddress);
-    test.ok(remoteMap.contains(name, suffix));
+    test.ok(remoteMap.contains(nbname));
     test.done();
   });
 };
 
-function addToMap(map, name, suffix, group) {
-  map.add(name, suffix, group, '127.0.0.1', 10, 'broadcast');
+function addToMap(map, nbname, group) {
+  map.add(nbname, group, '127.0.0.1', 10, 'broadcast');
 }

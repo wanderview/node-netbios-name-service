@@ -107,8 +107,8 @@ module.exports.testUnpackRegistrationNegativeResponse = function(test) {
     test.ok(msg.authoritative, 'message should be authoritative');
     validateSections(test, msg, 0, 1, 0, 0);
     var a = msg.answerRecords[0];
-    test.equal(a.name, 'VMWINXP.example.com', 'bad record name');
-    test.equal(a.suffix, 0x20, 'bad record suffix');
+    test.equal(a.nbname.fqdn, 'VMWINXP.example.com', 'bad record name');
+    test.equal(a.nbname.suffix, 0x20, 'bad record suffix');
     test.equal(a.type, 'nb', 'should be nb record');
     test.equal(a.nb.entries.length, 1, 'should be 1 nb entry');
     test.equal(a.nb.entries[0].address, '192.168.1.7', 'bad IP');
@@ -123,8 +123,8 @@ module.exports.testUnpackNbstat = function(test) {
     test.equal(msg.op, 'query', 'message op is [' + msg.op + '], not [query]');
     validateSections(test, msg, 1, 0, 0, 0);
     test.equal(msg.questions[0].type, 'nbstat', 'bad type');
-    test.equal(msg.questions[0].name, 'XYKON-2', 'bad name');
-    test.equal(msg.questions[0].suffix, 0, 'bad suffix');
+    test.equal(msg.questions[0].nbname.fqdn, 'XYKON-2', 'bad name');
+    test.equal(msg.questions[0].nbname.suffix, 0, 'bad suffix');
     test.done();
   });
 }
@@ -137,33 +137,33 @@ module.exports.testUnpackNbstatResponse = function(test) {
     validateSections(test, msg, 0, 1, 0, 0);
     var a = msg.answerRecords[0];
     test.equal(a.type, 'nbstat', 'bad type');
-    test.equal(a.name, 'VMWINXP', 'bad name');
-    test.equal(a.suffix, 0x20, 'bad suffix');
+    test.equal(a.nbname.fqdn, 'VMWINXP', 'bad name');
+    test.equal(a.nbname.suffix, 0x20, 'bad suffix');
     var nodes = a.nbstat.nodes;
     test.equal(nodes.length, 6, 'nodes array length');
 
-    test.equal(nodes[0].name, 'VMWINXP', 'bad node name');
-    test.equal(nodes[0].suffix, 0, 'bad node suffix');
+    test.equal(nodes[0].nbname.fqdn, 'VMWINXP', 'bad node name');
+    test.equal(nodes[0].nbname.suffix, 0, 'bad node suffix');
     test.ok(!nodes[0].group, 'bad node group flag');
 
-    test.equal(nodes[1].name, 'VMWINXP', 'bad node name');
-    test.equal(nodes[1].suffix, 0x20, 'bad node suffix');
+    test.equal(nodes[1].nbname.fqdn, 'VMWINXP', 'bad node name');
+    test.equal(nodes[1].nbname.suffix, 0x20, 'bad node suffix');
     test.ok(!nodes[1].group, 'bad node group flag');
 
-    test.equal(nodes[2].name, 'WORKGROUP', 'bad node name');
-    test.equal(nodes[2].suffix, 0, 'bad node suffix');
+    test.equal(nodes[2].nbname.fqdn, 'WORKGROUP', 'bad node name');
+    test.equal(nodes[2].nbname.suffix, 0, 'bad node suffix');
     test.ok(nodes[2].group, 'bad node group flag');
 
-    test.equal(nodes[3].name, 'WORKGROUP', 'bad node name');
-    test.equal(nodes[3].suffix, 0x1e, 'bad node suffix');
+    test.equal(nodes[3].nbname.fqdn, 'WORKGROUP', 'bad node name');
+    test.equal(nodes[3].nbname.suffix, 0x1e, 'bad node suffix');
     test.ok(nodes[3].group, 'bad node group flag');
 
-    test.equal(nodes[4].name, 'WORKGROUP', 'bad node name');
-    test.equal(nodes[4].suffix, 0x1d, 'bad node suffix');
+    test.equal(nodes[4].nbname.fqdn, 'WORKGROUP', 'bad node name');
+    test.equal(nodes[4].nbname.suffix, 0x1d, 'bad node suffix');
     test.ok(!nodes[4].group, 'bad node group flag');
 
-    test.equal(nodes[5].name, '\u0001\u0002__MSBROWSE__\u0002', 'bad node name');
-    test.equal(nodes[5].suffix, 0x1, 'bad node suffix');
+    test.equal(nodes[5].nbname.fqdn, '\u0001\u0002__MSBROWSE__\u0002', 'bad node name');
+    test.equal(nodes[5].nbname.suffix, 0x1, 'bad node suffix');
     test.ok(nodes[5].group, 'bad node group flag');
 
     for (var i = 0; i < nodes.length; ++i) {

@@ -25,6 +25,7 @@
 
 var Map = require('../lib/map');
 
+var NBName = require('netbios-name');
 var timers = require('timers');
 
 function setTimeout2(delay, callback) {
@@ -34,18 +35,14 @@ function setTimeout2(delay, callback) {
 module.exports.testMapWithTimeout = function(test) {
   test.expect(6);
   var map = new Map();
-  map.on('timeout', function(name, suffix) {
-    map.remove(name, suffix);
-  });
+  map.on('timeout', map.remove.bind(map));
 
-  var name = 'foobar';
-  var suffix = 0x20;
+  var nbname = new NBName({fqdn: 'foobar', suffix: 0x20});
 
-  test.equal(map.getNb(name, suffix), null);
+  test.equal(map.getNb(nbname), null);
 
   var record = {
-    name: name,
-    suffix: suffix,
+    nbname: nbname,
     ttl: 2,
     type: 'nb',
     nb: {
@@ -55,20 +52,20 @@ module.exports.testMapWithTimeout = function(test) {
 
   map.update(record);
 
-  test.notEqual(map.getNb(name, suffix), null);
+  test.notEqual(map.getNb(nbname), null);
 
   setTimeout2(1100, function() {
-    var mapRecord = map.getNb(name, suffix);
+    var mapRecord = map.getNb(nbname);
     test.notEqual(mapRecord, null);
     test.equal(mapRecord.ttl, 1);
 
     map.update(record);
 
-    mapRecord = map.getNb(name, suffix);
+    mapRecord = map.getNb(nbname);
     test.equal(mapRecord.ttl, 2);
 
     setTimeout2(2100, function() {
-      mapRecord = map.getNb(name, suffix);
+      mapRecord = map.getNb(nbname);
       test.equal(mapRecord, null);
 
       map.clear();
@@ -80,21 +77,18 @@ module.exports.testMapWithTimeout = function(test) {
 module.exports.testMapWithoutTimeout = function(test) {
   test.expect(4);
   var map = new Map({enableTimeouts: false});
-  map.on('timeout', function(name, suffix) {
-    map.remove(name, suffix);
-  });
+  map.on('timeout', map.remove.bind(map));
 
-  var name = 'foobar.example.com';
-  var suffix = 0x10;
+  var nbname = new NBName({fqdn: 'foobar.example.com', suffix: 0x10});
 
-  test.equal(map.getNb(name, suffix), null);
+  test.equal(map.getNb(nbname), null);
 
-  map.add(name, suffix, false, '127.0.0.1', 2, 'broadcast');
+  map.add(nbname, false, '127.0.0.1', 2, 'broadcast');
 
-  test.notEqual(map.getNb(name, suffix), null);
+  test.notEqual(map.getNb(nbname), null);
 
   setTimeout2(1100, function() {
-    var mapRecord = map.getNb(name, suffix);
+    var mapRecord = map.getNb(nbname);
     test.notEqual(mapRecord, null);
     test.equal(mapRecord.ttl, 2);
 
@@ -107,12 +101,10 @@ module.exports.testGetNbstat = function(test) {
   test.expect(4);
   var map = new Map();
 
-  var suffix = 0x10;
+  var nbname1 = new NBName({fqdn: 'foobar.example.com'});
 
-  var name1 = 'foobar.example.com';
   var record1 = {
-    name: name1,
-    suffix: suffix,
+    nbname: nbname1,
     ttl: 2,
     type: 'nb',
     nb: {
@@ -121,10 +113,9 @@ module.exports.testGetNbstat = function(test) {
   };
   map.update(record1);
 
-  var name2 = 'snafu';
+  var nbname2 = new NBName({fqdn: 'snafu'});
   var record2 = {
-    name: name2,
-    suffix: suffix,
+    nbname: nbname2,
     ttl: 2,
     type: 'nb',
     nb: {
@@ -133,13 +124,13 @@ module.exports.testGetNbstat = function(test) {
   };
   map.update(record2);
 
-  var nbstat1 = map.getNbstat('arg.example.com', suffix);
+  var nbstat1 = map.getNbstat(new NBName({fqdn: 'arg.example.com'}));
   test.equal(nbstat1.nbstat.nodes.length, 1);
-  test.equal(nbstat1.nbstat.nodes[0].name, name1);
+  test.equal(nbstat1.nbstat.nodes[0].nbname.toString(), nbname1.toString());
 
-  var nbstat2 = map.getNbstat('hmm', suffix);
+  var nbstat2 = map.getNbstat(new NBName({fqdn: 'hmm'}));
   test.equal(nbstat2.nbstat.nodes.length, 1);
-  test.equal(nbstat2.nbstat.nodes[0].name, name2);
+  test.equal(nbstat2.nbstat.nodes[0].nbname.toString(), nbname2.toString());
 
   map.clear();
 
@@ -147,12 +138,11 @@ module.exports.testGetNbstat = function(test) {
 };
 
 module.exports.testEvents = function(test) {
-  test.expect(15);
+  test.expect(13);
 
   var map = new Map({enableTimeouts: false});
 
-  var name = 'FOOBAR';
-  var suffix = 0x20;
+  var nbname = new NBName({fqdn: 'FOOBAR', suffix: 0x20});
   var group = false;
   var address = '127.0.0.1';
   var ttl = 53;
@@ -160,8 +150,7 @@ module.exports.testEvents = function(test) {
 
   var validate = function(node) {
     test.ok(node);
-    test.equal(node.name, name);
-    test.equal(node.suffix, suffix);
+    test.equal(node.nbname.toString(), nbname.toString());
     test.equal(node.address, address);
     test.equal(node.group, group);
     test.equal(node.type, type);
@@ -181,6 +170,6 @@ module.exports.testEvents = function(test) {
     test.done();
   });
 
-  map.add(name, suffix, group, address, ttl, type);
-  map.remove(name, suffix);
+  map.add(nbname, group, address, ttl, type);
+  map.remove(nbname);
 };
