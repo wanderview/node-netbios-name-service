@@ -3,6 +3,8 @@
 A 100% javascript implemention of the NetBIOS name service defined in
 [RFC1001][] and [RFC1002][].
 
+[![Build Status](https://travis-ci.org/wanderview/node-netbios-name-service.png)](https://travis-ci.org/wanderview/node-netbios-name-service)
+
 ## Example
 
     var Service = require('netbios-name-service');
