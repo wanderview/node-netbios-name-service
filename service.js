@@ -240,17 +240,16 @@ NetbiosNameService.prototype._stopUdp = function(callback) {
 
 NetbiosNameService.prototype._onUdpMsg = function(msg, rinfo) {
   var self = this;
-  unpack(msg, function(error, len, nbmsg) {
-    if (error) {
-      // TODO: consider using a 'warning' event instead; avoid stopping service
-      //       due to a malformed packet received from a remote host
-      //self.emit('error', error);
-      return;
-    }
+  var res = unpack(msg);
+  if (res.error) {
+    // TODO: consider using a 'warning' event instead; avoid stopping service
+    //       due to a malformed packet received from a remote host
+    //self.emit('error', res.error);
+    return;
+  }
 
-    self._onNetbiosMsg(nbmsg, self._sendUdpMsg.bind(self, rinfo.port,
-                                                    rinfo.address));
-  });
+  self._onNetbiosMsg(res.message, self._sendUdpMsg.bind(self, rinfo.port,
+                                                        rinfo.address));
 };
 
 NetbiosNameService.prototype._sendUdpMsg = function(port, address, msg, callback) {
@@ -261,18 +260,17 @@ NetbiosNameService.prototype._sendUdpMsg = function(port, address, msg, callback
   var maxSize = 576 - 20 - 8;
   var buf = new Buffer(maxSize);
 
-  pack(buf, msg, function(error, len) {
-    if (error) {
-      if (typeof callback === 'function') {
-        callback(error);
-      }
-      // TODO: consider using a 'warning' event instead; avoid stopping service
-      //self.emit('error', error);
-      return;
+  var res = pack(buf, msg);
+  if (res.error) {
+    if (typeof callback === 'function') {
+      callback(res.error);
     }
+    // TODO: consider using a 'warning' event instead; avoid stopping service
+    //self.emit('error', res.error);
+    return;
+  }
 
-    self._udpSocket.send(buf, 0, len, port, address, callback);
-  });
+  self._udpSocket.send(buf, 0, res.bytesWritten, port, address, callback);
 };
 
 NetbiosNameService.prototype._newTransactionId = function() {
