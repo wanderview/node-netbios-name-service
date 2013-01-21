@@ -6,7 +6,7 @@
     "name",
     "service"
   ],
-  "version": "0.3.0-RC",
+  "version": "0.3.0",
   "author": "Ben Kelly <ben@wanderview.com>",
   "license": "BSD",
   "dependencies": {
