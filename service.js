@@ -140,7 +140,7 @@ NetbiosNameService.prototype.stop = function(callback) {
 NetbiosNameService.prototype.add = function(opts, callback) {
   opts.address = opts.address || this._localAddress;
   opts.group = !!opts.group;
-  opts.ttl = opts.ttl || this.defaultTtl;
+  opts.ttl = opts.ttl || this._defaultTtl;
   this._mode.add(opts, callback);
 };
 
