@@ -7,6 +7,7 @@ A 100% javascript implemention of the NetBIOS name service defined in
 
 ## Example
 
+``` javascript
     var Service = require('netbios-name-service');
     var NBName = require('netbios-name');
 
@@ -45,12 +46,14 @@ A 100% javascript implemention of the NetBIOS name service defined in
         address === null;   // true
       });
     });
+```
 
 ## Common Issues
 
 By default the name service will attempt to by to port 137.  If you do not
 run as root or with sudo you will get an error like the following:
 
+```
     Error: listen EACCES
         at errnoException (net.js:847:11)
         at Server._listen2 (net.js:972:19)
@@ -62,27 +65,34 @@ run as root or with sudo you will get an error like the following:
         at Module._compile (module.js:454:26)
         at Object.Module._extensions..js (module.js:472:10)
         at Module.load (module.js:356:32)
+```
 
 
 In addition, most desktop operating systems run passive NetBIOS name service
 daemons in order to provide network browsing features.  If this is the case
 you will receive an error like this:
 
+```
     Error: bind EADDRINUSE
         at errnoException (dgram.js:359:11)
         at dgram.js:134:26
         at dns.js:71:18
         at process._tickCallback (node.js:386:13)
+```
 
 You will need to disable the default operating system NetBIOS support to avoid
 this problem.  On Mac OS X this can be done by running the following command:
 
+``` bash
     sudo launchctl unload /System/Library/LaunchDaemons/com.apple.netbiosd.plist
+```
 
 On Linux it will vary by distribution, but its probably something along the
 lines of:
 
+``` bash
     sudo /etc/init.d/samba stop
+```
 
 ## Limitations
 
