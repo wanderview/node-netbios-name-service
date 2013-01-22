@@ -216,9 +216,7 @@ NetbiosNameService.prototype._startUdp = function(callback) {
     self._udpSocket.on('listening', function() {
       // The socket must be listening before we can enable the broadcast flag
       self._udpSocket.setBroadcast(true);
-      if (typeof callback === 'function') {
-        callback();
-      }
+      callback();
     });
     self._udpSocket.bind(self._udpPort, self._bindAddress);
     return;
