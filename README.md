@@ -8,44 +8,44 @@ A 100% javascript implemention of the NetBIOS name service defined in
 ## Example
 
 ``` javascript
-    var Service = require('netbios-name-service');
-    var NBName = require('netbios-name');
+var Service = require('netbios-name-service');
+var NBName = require('netbios-name');
 
-    var serv = new Service();
+var serv = new Service();
 
-    serv.start(function() {
-      serv.on('added', function(opts) {
-        console.log('ADDED: [' + opts.nbname + '] [' +
-                    opts.address + ']');
-      });
+serv.start(function() {
+  serv.on('added', function(opts) {
+    console.log('ADDED: [' + opts.nbname + '] [' +
+                opts.address + ']');
+  });
 
-      serv.on('removed', function(opts) {
-        console.log('REMOVED: [' + opts.nbname + ']');
-      });
+  serv.on('removed', function(opts) {
+    console.log('REMOVED: [' + opts.nbname + ']');
+  });
 
-      serv.on('error', function(error) {
-        console.log('ERROR: [' + error + ']');
-      });
+  serv.on('error', function(error) {
+    console.log('ERROR: [' + error + ']');
+  });
 
-      var nbname = new NBName({fqdn: 'VMWINXP.example.com'});
-      serv.find(nbname, function(error, address) {
-        console.log('FIND: [' + nbname + '] resulted in [' + address + ']');
-      });
+  var nbname = new NBName({fqdn: 'VMWINXP.example.com'});
+  serv.find(nbname, function(error, address) {
+    console.log('FIND: [' + nbname + '] resulted in [' + address + ']');
+  });
 
-      var nbname2 = new NBName({fqdn: 'FOOBAR.example.com'});
-      serv.add({
-        nbname: nbname2,
-        ttl: 3600,
-      }, function(error, success) {
-        console.log('ADD: [' + nbname2 + '] resulted in [' + success + ']');
-      });
+  var nbname2 = new NBName({fqdn: 'FOOBAR.example.com'});
+  serv.add({
+    nbname: nbname2,
+    ttl: 3600,
+  }, function(error, success) {
+    console.log('ADD: [' + nbname2 + '] resulted in [' + success + ']');
+  });
 
-      var badNBName = new NBName({fqdn: 'THISISTOOLONGFORNETBIOS.example.com'});
-      serv.find(badNBName, function(error, address) {
-        console.log('FIND: returned error [' + error + ']');
-        address === null;   // true
-      });
-    });
+  var badNBName = new NBName({fqdn: 'THISISTOOLONGFORNETBIOS.example.com'});
+  serv.find(badNBName, function(error, address) {
+    console.log('FIND: returned error [' + error + ']');
+    address === null;   // true
+  });
+});
 ```
 
 ## Common Issues
@@ -54,17 +54,17 @@ By default the name service will attempt to by to port 137.  If you do not
 run as root or with sudo you will get an error like the following:
 
 ```
-    Error: listen EACCES
-        at errnoException (net.js:847:11)
-        at Server._listen2 (net.js:972:19)
-        at listen (net.js:1018:10)
-        at Server.listen (net.js:1067:5)
-        at NetbiosNameService._startTcp (/Users/bkelly/Dropbox/devel/node-netbios-name-service/service.js:171:23)
-        at NetbiosNameService.start (/Users/bkelly/Dropbox/devel/node-netbios-name-service/service.js:116:8)
-        at Object.<anonymous> (/Users/bkelly/Dropbox/devel/node-netbios-name-service/example/server.js:32:6)
-        at Module._compile (module.js:454:26)
-        at Object.Module._extensions..js (module.js:472:10)
-        at Module.load (module.js:356:32)
+Error: listen EACCES
+    at errnoException (net.js:847:11)
+    at Server._listen2 (net.js:972:19)
+    at listen (net.js:1018:10)
+    at Server.listen (net.js:1067:5)
+    at NetbiosNameService._startTcp (/Users/bkelly/Dropbox/devel/node-netbios-name-service/service.js:171:23)
+    at NetbiosNameService.start (/Users/bkelly/Dropbox/devel/node-netbios-name-service/service.js:116:8)
+    at Object.<anonymous> (/Users/bkelly/Dropbox/devel/node-netbios-name-service/example/server.js:32:6)
+    at Module._compile (module.js:454:26)
+    at Object.Module._extensions..js (module.js:472:10)
+    at Module.load (module.js:356:32)
 ```
 
 
@@ -73,25 +73,25 @@ daemons in order to provide network browsing features.  If this is the case
 you will receive an error like this:
 
 ```
-    Error: bind EADDRINUSE
-        at errnoException (dgram.js:359:11)
-        at dgram.js:134:26
-        at dns.js:71:18
-        at process._tickCallback (node.js:386:13)
+Error: bind EADDRINUSE
+    at errnoException (dgram.js:359:11)
+    at dgram.js:134:26
+    at dns.js:71:18
+    at process._tickCallback (node.js:386:13)
 ```
 
 You will need to disable the default operating system NetBIOS support to avoid
 this problem.  On Mac OS X this can be done by running the following command:
 
 ``` bash
-    sudo launchctl unload /System/Library/LaunchDaemons/com.apple.netbiosd.plist
+sudo launchctl unload /System/Library/LaunchDaemons/com.apple.netbiosd.plist
 ```
 
 On Linux it will vary by distribution, but its probably something along the
 lines of:
 
 ``` bash
-    sudo /etc/init.d/samba stop
+sudo /etc/init.d/samba stop
 ```
 
 ## Limitations
