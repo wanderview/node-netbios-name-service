@@ -173,7 +173,7 @@ NetbiosNameService.prototype._startTcp = function(callback) {
     }
   }
 
-  callback();
+  process.nextTick(callback);
 };
 
 NetbiosNameService.prototype._stopTcp = function(callback) {
@@ -185,7 +185,7 @@ NetbiosNameService.prototype._stopTcp = function(callback) {
     });
     return;
   }
-  callback();
+  process.nextTick(callback);
 };
 
 NetbiosNameService.prototype._onTcpConnect = function(socket) {
@@ -223,6 +223,8 @@ NetbiosNameService.prototype._startUdp = function(callback) {
     self._udpSocket.bind(self._udpPort, self._bindAddress);
     return;
   }
+
+  process.nextTick(callback);
 };
 
 NetbiosNameService.prototype._stopUdp = function(callback) {
@@ -235,7 +237,7 @@ NetbiosNameService.prototype._stopUdp = function(callback) {
     self._udpSocket.close();
     return;
   }
-  callback();
+  process.nextTick(callback);
 };
 
 NetbiosNameService.prototype._onUdpMsg = function(msg, rinfo) {
@@ -263,7 +265,7 @@ NetbiosNameService.prototype._sendUdpMsg = function(port, address, msg, callback
   var res = pack(buf, msg);
   if (res.error) {
     if (typeof callback === 'function') {
-      callback(res.error);
+      process.nextTick(callback.bind(null, res.error));
     }
     // TODO: consider using a 'warning' event instead; avoid stopping service
     //self.emit('error', res.error);
