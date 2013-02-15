@@ -13,7 +13,7 @@
     "ip": "~0.0.3",
     "netbios-name": "~0.2.0",
     "readable-stream": "~0.2.0",
-    "mac-address": "~0.1.0"
+    "mac-address": "~0.2.0"
   },
   "devDependencies": {
     "nodeunit": "~0.7.4",
