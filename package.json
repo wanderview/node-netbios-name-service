@@ -12,7 +12,7 @@
   "dependencies": {
     "ip": "~0.0.3",
     "netbios-name": "~0.2.0",
-    "readable-stream": "~0.2.0",
+    "readable-stream": "~1.0.0",
     "mac-address": "~0.2.0"
   },
   "devDependencies": {
